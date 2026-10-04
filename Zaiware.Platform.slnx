@@ -1,4 +1,12 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+  </Folder>
   <Project Path="Zaiware.Platform.AppHost/Zaiware.Platform.AppHost.csproj" />
   <Project Path="Zaiware.Platform.IdentityServer/Zaiware.Platform.IdentityServer.csproj" Id="cd9224fa-117c-4539-bf26-5a6d4796b0b7" />
 </Solution>
