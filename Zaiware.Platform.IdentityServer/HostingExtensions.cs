@@ -15,10 +15,10 @@ namespace Zaiware.Platform.IdentityServer
                 .AddInMemoryClients(Config.Clients)
                 .AddLicenseSummary();
 
-            // add `.PersistKeysTo…()` and `.ProtectKeysWith…()` calls
-            // see more at https://docs.duendesoftware.com/general/data-protection
-            _ = builder.Services.AddDataProtection()
-                       .SetApplicationName("IdentityServer");
+            _ = builder.Services
+                .AddDataProtection()
+                .SetApplicationName(Environment.GetRequiredEnvironmentVariable(EnvironmentVariablesNames.DataProtectionApplicationName))
+                .PersistKeysToFileSystem(new DirectoryInfo(Environment.GetRequiredEnvironmentVariable(EnvironmentVariablesNames.DataProtectionKeysStoreDirectory)));
 
             return builder.Build();
         }
