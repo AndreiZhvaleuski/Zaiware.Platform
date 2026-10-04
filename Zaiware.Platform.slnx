@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="Zaiware.Platform.AppHost/Zaiware.Platform.AppHost.csproj" />
+  <Project Path="Zaiware.Platform.IdentityServer/Zaiware.Platform.IdentityServer.csproj" Id="cd9224fa-117c-4539-bf26-5a6d4796b0b7" />
 </Solution>

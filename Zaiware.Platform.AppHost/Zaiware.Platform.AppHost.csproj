@@ -9,4 +9,8 @@
     <UserSecretsId>7aee7103-68c0-4900-b326-5e337824f113</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Zaiware.Platform.IdentityServer\Zaiware.Platform.IdentityServer.csproj" />
+  </ItemGroup>
+
 </Project>
