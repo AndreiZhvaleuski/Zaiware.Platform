@@ -9,5 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="Duende.IdentityServer" />
+    <PackageReference Include="Duende.Storage.PostgreSql" />
+    <PackageReference Include="Duende.UserManagement.IdentityServer8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
 </Project>
