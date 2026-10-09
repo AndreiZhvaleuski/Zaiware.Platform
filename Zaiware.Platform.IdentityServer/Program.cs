@@ -3,8 +3,25 @@ using Duende.Storage.PostgreSql;
 using Duende.Storage.Schema;
 using Microsoft.AspNetCore.DataProtection;
 using Zaiware.Platform.IdentityServer;
+using Zaiware.Platform.ServiceDefaults.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
+
+_ = builder.AddObservability()
+    .Services.AddOpenTelemetry()
+    .WithMetrics(metrics =>
+    {
+        metrics.AddMeter(Duende.IdentityServer.Telemetry.ServiceName);
+    })
+    .WithTracing(traces =>
+    {
+        traces
+            .AddSource(IdentityServerConstants.Tracing.Basic)
+            .AddSource(IdentityServerConstants.Tracing.Cache)
+            .AddSource(IdentityServerConstants.Tracing.Services)
+            .AddSource(IdentityServerConstants.Tracing.Stores)
+            .AddSource(IdentityServerConstants.Tracing.Validation);
+    });
 
 _ = builder.Services
     .AddNpgsqlDataSource(builder.Configuration.GetRequiredConnectionString("IdentityServer"))

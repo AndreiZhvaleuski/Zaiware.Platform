@@ -13,4 +13,8 @@
     <PackageReference Include="Duende.UserManagement.IdentityServer8" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Zaiware.Platform.ServiceDefaults.Observability\Zaiware.Platform.ServiceDefaults.Observability.csproj" />
+  </ItemGroup>
 </Project>

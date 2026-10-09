@@ -9,4 +9,5 @@
   </Folder>
   <Project Path="Zaiware.Platform.AppHost/Zaiware.Platform.AppHost.csproj" />
   <Project Path="Zaiware.Platform.IdentityServer/Zaiware.Platform.IdentityServer.csproj" Id="cd9224fa-117c-4539-bf26-5a6d4796b0b7" />
+  <Project Path="Zaiware.Platform.ServiceDefaults.Observability/Zaiware.Platform.ServiceDefaults.Observability.csproj" Id="49a0f1f5-2db9-4b02-b347-70709fdf477d" />
 </Solution>
