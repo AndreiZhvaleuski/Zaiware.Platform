@@ -11,7 +11,8 @@ _ = builder.Services
     .AddIdentityServer()
     .AddStorage(builder => builder.AddPostgreSql())
     .AddConfigurationStorage()
-    .AddOperationalStorage();
+    .AddOperationalStorage()
+    .AddUserManagement(_ => {});
 
 _ = builder.Services
     .AddDataProtection()
