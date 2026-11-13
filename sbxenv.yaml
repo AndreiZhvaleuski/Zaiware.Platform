@@ -1,0 +1,83 @@
+# Sandbox environment for Zaiware.Platform.
+#   sbx env plan     review what would change
+#   sbx env run      create (or attach) the sandbox
+#   sbx env rm       destroy the sandbox and its scoped secrets
+#
+# `sbx env` is experimental; pin your sbx version.
+# Keep this file at the workspace root: sbx mounts it read-only so the agent
+# cannot change what a later `sbx env run` executes on the host.
+
+schemaVersion: "1"
+name: zaiware-platform
+agent: opencode
+
+sandboxOptions:
+  pullPolicy: always
+
+# No entrypoint/cmd override on purpose. An attached `sbx env run` is an
+# exec-style session inside the sandbox: its process (and anything it spawned
+# in the foreground) is torn down when the session ends, so a `cmd: [serve, ...]`
+# server dies with the terminal. long-running@1 stops the sandbox from
+# auto-stopping, it does not keep a session process alive.
+# The API server is started by the opencode-server kit's lifecycle startup hook
+# at boot instead, and the sandbox is started without attaching:
+#   sbx env run --detach --env-args-file "$env:USERPROFILE\.sbx\zaiware.args"
+
+# Mounts the directory containing this file.
+workspace: .
+
+# The server password is required at every invocation so it never lands in git.
+# Keep the args file OUTSIDE the mounted workspace, otherwise the agent can read it:
+#   %USERPROFILE%\.sbx\zaiware.args
+#   sbx env run --env-args-file "$env:USERPROFILE\.sbx\zaiware.args"
+#
+# It does not hide the value from the agent: the server runs inside the sandbox,
+# so OPENCODE_SERVER_PASSWORD is in its environment. The password protects the
+# published host port from other host processes, not secrets from the agent.
+args:
+  serverPassword:
+    required: true
+    description: Password for the in-sandbox OpenCode API server (basic auth)
+
+env:
+  OPENCODE_SERVER_PASSWORD: ${{ env.args.serverPassword }}
+
+kits:
+  # Network access + credential injection. Adds no files to the image.
+  - ./sbx/kits/provider-keys
+  # Keeps the sandbox (and the server) alive after the last client disconnects.
+  - ./sbx/kits/opencode-server
+  - ./sbx/kits/dotnet
+  
+# Publish the API server on host loopback only, explicitly.
+ports:
+  - sandbox: 4096
+    host: 4096
+    hostIP: 127.0.0.1
+    protocol: tcp4
+
+# Secret provisioning. Prefer one of these two paths:
+#
+#   1) Host-scoped, once (persists across sandbox recreation):
+#        sbx secret set deepseek
+#        sbx secret set opencode-go
+#
+#   2) Declared here, provisioned per sandbox on create:
+#
+# secrets:
+#   deepseek:
+#     ref: 'op://Private/DeepSeek/api-key'      # 1Password CLI (`op`)
+#   opencode-go:
+#     command: 'gh auth token'                   # or any host command
+#
+# Never use `value:` — it stores plaintext in this file.
+
+bindings:
+  deepseek:
+    apiKey:
+      domains:
+        - api.deepseek.com
+  opencode-go:
+    apiKey:
+      domains:
+        - opencode.ai

@@ -1,0 +1,47 @@
+# syntax=docker/sandbox-kit:3
+# .NET SDK for the sandbox, installed by dotnetup and baked into the image.
+#
+# Why baked and not a startup hook: the sandbox is recreated with `sbx env rm`
+# / `sbx env run`, and a runtime download would repeat on every new sandbox.
+# A mixin layer makes the toolchain part of the image digest, so the agent gets
+# the same SDK on every boot with no network round trip.
+#
+# The version is pinned by `sdkVersion`, which must track global.json. Keeping
+# it in the Kit (rather than deriving it at runtime) is what makes the image
+# reproducible; bump both together.
+schemaVersion: "3"
+displayName: .NET SDK (dotnetup)
+description: >-
+  A dotnetup-managed .NET SDK in the agent's home, on PATH as `dotnet`, plus
+  the ICU libraries the hardened workload image does not ship.
+sourceUrl: https://learn.microsoft.com/dotnet/core/tools/dotnetup/
+licenses: [MIT]
+
+kind: mixin
+
+args:
+  sdkVersion:
+    default: "10.0.401"
+    pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+    description: Exact .NET SDK version to install; keep in sync with global.json
+    buildArg: DOTNET_SDK_VERSION
+
+provides:
+  - "dotnet@${{ kit.args.sdkVersion }}"
+
+capabilities:
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          # NuGet restore. api.nuget.org answers, package downloads redirect to
+          # *.nuget.org; the single-label wildcard covers both.
+          - api.nuget.org:443
+          - "*.nuget.org:443"
+          # Only needed if the agent installs another SDK or updates dotnetup
+          # from inside the sandbox. The baked install itself uses no egress.
+          - aka.ms:443
+          - dotnet.microsoft.com:443
+          - builds.dotnet.microsoft.com:443
+          - dotnetcli.azureedge.net:443
+          - dotnetcli.blob.core.windows.net:443

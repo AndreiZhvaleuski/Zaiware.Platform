@@ -1,0 +1,36 @@
+# syntax=docker/sandbox-kit:3
+schemaVersion: "3"
+kind: mixin
+displayName: OpenCode server lifecycle
+
+# Runs `opencode serve` on every sandbox boot, in the background, so the API
+# server is not tied to an sbx session. long-running@1 keeps the sandbox alive
+# after the last client disconnects.
+#
+# Why not a `cmd:` launch override: that runs inside the attached session and
+# is torn down when the session ends. Why not a plain background process either:
+# only a boot hook is restarted by the runtime, not by the client.
+#
+# The env list is not optional: a lifecycle@1 hook sees only the variable names
+# it declares (plus PATH, HOME, PWD, ...). Without them the server starts
+# without OPENCODE_SERVER_PASSWORD (no basic auth) and without the provider
+# credential sentinels it needs to reach the model APIs. The cd sets the
+# server's project root to the mounted workspace instead of the image WORKDIR.
+
+capabilities:
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      startup:
+        - command: cd "$WORKSPACE_DIR" && exec opencode serve --hostname 0.0.0.0 --port 4096
+          env:
+            - WORKSPACE_DIR
+            - OPENCODE_SERVER_PASSWORD
+            - DEEPSEEK_API_KEY
+            - OPENCODE_API_KEY
+            - HTTP_PROXY
+            - HTTPS_PROXY
+            - NO_PROXY
+          background: true
+          description: OpenCode API server
+
+  - type: com.docker.sandbox/long-running@1
