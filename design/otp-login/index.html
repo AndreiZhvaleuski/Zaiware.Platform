@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Sign in · Nimbus</title>
+<style>
+  :root{
+    /* colors — glassmorphism design system (Primary #1856FF / Surface #FFFFFF / Text #141414) */
+    --ink:#141414;
+    --ink-dim:#4b4b57;
+    --ink-soft:#6f6f7a;
+    --accent:#1856FF;
+    --accent-hi:#1244cc;
+    --accent-deep:#1244cc;
+    --danger:#b3261e;
+    --danger-deep:#7a1f1f;
+    --ok:#0b7a4b;
+    --ok-deep:#0d5c3d;
+    --canvas:#eef2fb;
+    --glass:rgba(255,255,255,.38);
+    --glass-strong:rgba(255,255,255,.55);
+    --rim:rgba(255,255,255,.75);
+    --rim-hi:rgba(255,255,255,.95);
+    --mesh-a:#c9d8ff;
+    --mesh-b:#dbe7ff;
+    --mesh-c:#f5e6ff;
+    --surface:#ffffff;
+    --highlight:#ffffff;
+    --on-accent:#ffffff;
+    --mask:#000000;
+    --placeholder:#8b8b96;
+    --field-border:#c3d0e8;
+    --border-hover:#93a9d6;
+    --accent-hover-a:var(--accent-hover-a);
+    --accent-hover-b:var(--accent-hover-b);
+    --focus:var(--accent);
+    --hover-ink:var(--ink);
+    color-scheme:light;
+    /* geometry / motion */
+    --radius:22px;
+    --ease:cubic-bezier(.2,0,0,1);
+    --t-state:150ms;
+    --t-press:80ms;
+    --t-enter:220ms;
+  }
+  *{box-sizing:border-box}
+  html,body{min-height:100%}
+  body{
+    margin:0; min-height:100dvh; display:grid; place-items:center; padding:28px 20px;
+    font:16px/1.5 "Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:var(--canvas); overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+  }
+
+  /* static mesh: no perpetual motion (animation-discipline.md) */
+  .scene{
+    position:fixed; inset:0; z-index:-1; background:
+      radial-gradient(64vmax 54vmax at 10% -10%, var(--mesh-a), transparent 62%),
+      radial-gradient(52vmax 48vmax at 94% 4%, var(--mesh-b), transparent 60%),
+      radial-gradient(58vmax 52vmax at 22% 108%, var(--mesh-c), transparent 62%),
+      var(--canvas);
+  }
+  .grain{
+    position:absolute; inset:0; opacity:.045; mix-blend-mode:overlay; pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .shell{width:100%; max-width:430px}
+
+  .card{
+    position:relative; isolation:isolate; border-radius:var(--radius);
+    padding:38px 32px 32px;
+    background:linear-gradient(155deg,var(--glass-strong),var(--glass) 55%,var(--glass-strong));
+    -webkit-backdrop-filter:blur(30px) saturate(180%);
+    backdrop-filter:blur(30px) saturate(180%);
+    box-shadow:
+      0 1px 0 var(--highlight) inset,
+      0 -1px 0 rgba(24,86,255,.06) inset,
+      0 24px 60px -28px rgba(24,86,255,.45),
+      0 2px 8px rgba(16,24,40,.05);
+  }
+  .card::before{
+    content:""; position:absolute; inset:0; border-radius:inherit; padding:1px;
+    background:linear-gradient(150deg,var(--rim-hi),transparent 38%,transparent 62%,var(--rim));
+    -webkit-mask:linear-gradient(var(--mask) 0 0) content-box,linear-gradient(var(--mask) 0 0);
+    -webkit-mask-composite:xor;
+    mask:linear-gradient(var(--mask) 0 0) content-box,linear-gradient(var(--mask) 0 0);
+    mask-composite:exclude; pointer-events:none; z-index:2;
+  }
+  .card::after{
+    content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:1;
+    background:radial-gradient(420px 220px at var(--mx,50%) var(--my,0%),
+      var(--rim) 0%, transparent 62%);
+    opacity:.65; transition:opacity var(--t-state) var(--ease);
+  }
+  .content{position:relative; z-index:3}
+
+  .brand{display:flex; align-items:center; gap:10px; margin:0 0 26px}
+  .mark{
+    width:32px;height:32px;border-radius:11px;display:grid;place-items:center;
+    background:linear-gradient(160deg,var(--glass-strong),var(--glass));
+    border:1px solid var(--rim-hi);
+    box-shadow:0 1px 0 var(--rim-hi) inset;
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  }
+  .mark{color:var(--accent)}
+  .mark svg{width:18px;height:18px}
+  .brand-name{font-weight:600; letter-spacing:-.01em}
+
+  h1{
+    font-size:1.5rem; line-height:1.22; letter-spacing:-.021em; margin:0 0 8px; font-weight:600;
+  }
+  h1:focus{outline:none}
+  .sub{margin:0 0 8px; color:var(--ink-dim); font-size:.9375rem}
+  .sub strong{color:var(--ink); font-weight:600}
+  .hint-text{margin:0 0 20px; color:var(--ink-soft); font-size:.8125rem}
+
+  label{display:block; font-size:.8125rem; font-weight:600; margin-bottom:8px; color:var(--ink)}
+
+  input{
+    width:100%; min-height:48px; font:inherit; color:var(--ink);
+    background:rgba(255,255,255,.55);
+    border:1px solid var(--field-border); border-radius:14px; padding:12px 14px;
+    box-shadow:0 1px 0 var(--highlight) inset, 0 2px 6px rgba(16,24,40,.04);
+    transition:border-color var(--t-state) var(--ease), box-shadow var(--t-state) var(--ease), background var(--t-state) var(--ease);
+  }
+  input::placeholder{color:var(--placeholder)}
+  input:hover{border-color:var(--border-hover)}
+  input:focus{
+    outline:none; border-color:var(--accent);
+    background:var(--surface);
+    box-shadow:0 0 0 4px rgba(24,86,255,.20), 0 1px 0 var(--highlight) inset;
+  }
+  input[aria-invalid="true"]{border-color:var(--danger)}
+  input[aria-invalid="true"]:focus{box-shadow:0 0 0 4px rgba(255,138,138,.28), 0 1px 0 var(--rim) inset}
+  input:disabled{opacity:.55; cursor:not-allowed}
+
+  /* ---------- button: full state matrix ---------- */
+  .btn{
+    position:relative; overflow:hidden; isolation:isolate;
+    width:100%; min-height:48px; margin-top:18px; padding:12px 18px;
+    font:inherit; font-weight:600; letter-spacing:-.01em; color:var(--on-accent);
+    border:1px solid var(--rim-hi); border-radius:14px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:10px;
+    background:linear-gradient(180deg,rgba(88,140,255,.97),rgba(24,86,255,.95));
+    -webkit-backdrop-filter:blur(16px) saturate(180%);
+    backdrop-filter:blur(16px) saturate(180%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.55) inset,
+      0 16px 32px -16px rgba(24,86,255,.8);
+    transition:
+      transform var(--t-state) var(--ease),
+      background var(--t-state) var(--ease),
+      border-color var(--t-state) var(--ease),
+      box-shadow var(--t-state) var(--ease);
+    -webkit-tap-highlight-color:transparent;
+  }
+  .btn::before{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background:radial-gradient(120% 90% at 50% -30%, rgba(255,255,255,.5), rgba(255,255,255,.06) 46%, transparent 70%);
+    opacity:.75; transition:opacity var(--t-state) var(--ease);
+  }
+  .btn > span, .btn .spinner{position:relative; z-index:1}
+
+  @media (hover:hover) and (pointer:fine){
+    .btn:hover{
+      transform:translateY(-2px);
+      border-color:var(--highlight);
+      background:linear-gradient(180deg,#6d9bff,#2060ff);
+      box-shadow:
+        0 1px 0 var(--highlight) inset,
+        0 22px 40px -14px rgba(24,86,255,.9),
+        0 0 0 1px rgba(24,86,255,.25);
+    }
+    .btn:hover::before{opacity:1}
+  }
+  .btn:active{
+    transform:translateY(0) scale(.99);
+    transition-duration:var(--t-press);
+    box-shadow:0 2px 10px rgba(0,0,0,.5) inset;
+  }
+  .btn:focus-visible{
+    outline:2px solid var(--focus); outline-offset:2px;
+  }
+  .btn[disabled]{opacity:.6; cursor:not-allowed; transform:none; box-shadow:none}
+  .btn[disabled]:hover{transform:none}
+
+  .btn.ghost{
+    border-color:var(--field-border);
+    background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.68));
+    box-shadow:0 1px 0 var(--highlight) inset, 0 10px 24px -18px rgba(16,24,40,.35);
+    color:var(--ink);
+  }
+  @media (hover:hover) and (pointer:fine){
+    .btn.ghost:hover{
+      background:linear-gradient(180deg,rgba(255,255,255,.22),var(--glass));
+      box-shadow:0 1px 0 var(--rim-hi) inset, 0 12px 26px -18px rgba(0,0,0,.9);
+    }
+  }
+
+  .spinner{
+    width:16px;height:16px;border-radius:50%;display:none;
+    border:2px solid rgba(255,255,255,.35); border-top-color:var(--on-accent);
+    animation:spin .7s linear infinite;
+  }
+  .btn.is-loading .spinner{display:block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .error{
+    margin:8px 2px 0; font-size:.8125rem; color:var(--danger);
+    display:flex; gap:6px; align-items:flex-start;
+  }
+  .error:empty{display:none}
+  .error svg{width:14px;height:14px;flex:none;margin-top:2px}
+
+  .step[hidden]{display:none}
+  .step{animation:enter var(--t-enter) var(--ease)}
+  @keyframes enter{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+
+  .back{
+    display:inline-flex; gap:6px; align-items:center; min-height:44px;
+    margin:-6px 0 8px; padding:0 2px; background:none; border:0;
+    font:inherit; font-size:.875rem; color:var(--ink-dim); cursor:pointer;
+    border-radius:8px;
+    transition:color var(--t-state) var(--ease);
+  }
+  .back:hover{color:var(--ink)}
+  .back:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+
+  .otp{display:grid; grid-template-columns:repeat(6,1fr); gap:9px; border:0; padding:0; margin:0}
+  .otp input{
+    text-align:center; font-size:1.25rem; font-weight:600; min-height:56px;
+    padding:0; font-variant-numeric:tabular-nums; border-radius:14px;
+  }
+
+  .resend{
+    margin:14px 0 0; font-size:.875rem; color:var(--ink-dim); text-align:center;
+  }
+  .resend button{
+    min-height:44px; background:none; border:0; font:inherit; font-weight:600;
+    color:var(--accent-hi); cursor:pointer; padding:0 6px; border-radius:8px;
+    transition:color var(--t-state) var(--ease);
+  }
+  .resend button:not([disabled]):hover{color:var(--hover-ink);text-decoration:underline;text-underline-offset:3px}
+  .resend button[disabled]{color:var(--ink-soft); cursor:default; font-weight:400}
+  .resend button:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+
+  .demo{
+    margin:18px 0 0; padding:10px 12px; border-radius:12px; text-align:center;
+    font-size:.8125rem; color:var(--ink-dim);
+    background:rgba(255,255,255,.55); border:1px solid var(--field-border);
+  }
+  .demo code{font-size:.8125rem; color:var(--ink); background:rgba(255,255,255,.12); padding:1px 6px; border-radius:6px}
+
+  .legal{margin:16px 0 0; text-align:center; font-size:.75rem; color:var(--ink-soft)}
+  .legal a{color:inherit}
+
+  .done{text-align:center; padding:6px 0 2px}
+  .check{
+    width:60px;height:60px;margin:0 auto 18px;border-radius:50%;display:grid;place-items:center;
+    color:var(--ok); background:rgba(94,230,168,.18);
+    border:1px solid rgba(94,230,168,.5);
+    box-shadow:0 1px 0 var(--rim) inset, 0 0 28px -8px rgba(94,230,168,.6);
+  }
+  .check svg{width:28px;height:28px}
+
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+    .card{background:rgba(18,20,28,.94)}
+    input,.btn.ghost,.demo{background:rgba(255,255,255,.10)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important}
+  }
+  @media (max-width:400px){
+    .card{padding:30px 22px 26px; border-radius:22px}
+    h1{font-size:1.375rem}
+    .otp{gap:6px}
+  }
+</style>
+</head>
+<body>
+  <div class="scene" aria-hidden="true"><span class="grain"></span></div>
+
+  <main class="shell">
+    <section class="card" data-od-id="login-card" aria-labelledby="title">
+      <div class="content">
+        <header class="brand">
+          <span class="mark">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 18V6l12 12V6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="brand-name">Nimbus</span>
+        </header>
+
+        <p class="sr-only" id="status" role="status" aria-live="polite"></p>
+
+        <div class="step" id="step-email">
+          <h1 id="title" tabindex="-1">Sign in</h1>
+          <p class="sub">We'll email you a one-time code.</p>
+          <p class="hint-text" id="email-hint">No password needed — the code expires in 10 minutes.</p>
+          <form id="email-form" novalidate>
+            <label for="email">Work email</label>
+            <input id="email" name="email" type="email" inputmode="email"
+                   autocomplete="email" placeholder="you@company.com"
+                   required aria-describedby="email-hint email-error" autofocus>
+            <p class="error" id="email-error" role="alert" aria-live="polite"></p>
+            <button class="btn" type="submit" id="send-btn">
+              <span class="label">Send code</span><span class="spinner" aria-hidden="true"></span>
+            </button>
+          </form>
+        </div>
+
+        <div class="step" id="step-otp" hidden>
+          <button class="back" id="back-btn" type="button">&#8592; Change email</button>
+          <h1 id="title-otp" tabindex="-1">Check your email</h1>
+          <p class="sub">Enter the 6-digit code sent to <strong id="email-out"></strong></p>
+          <p class="hint-text" id="otp-hint">Codes are single-use. It may take up to a minute to arrive.</p>
+          <form id="otp-form" novalidate>
+            <fieldset class="otp" id="otp" aria-describedby="otp-hint otp-error">
+              <legend class="sr-only">One-time code, 6 digits</legend>
+              <input inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="Digit 1 of 6">
+              <input inputmode="numeric" maxlength="1" aria-label="Digit 2 of 6">
+              <input inputmode="numeric" maxlength="1" aria-label="Digit 3 of 6">
+              <input inputmode="numeric" maxlength="1" aria-label="Digit 4 of 6">
+              <input inputmode="numeric" maxlength="1" aria-label="Digit 5 of 6">
+              <input inputmode="numeric" maxlength="1" aria-label="Digit 6 of 6">
+            </fieldset>
+            <p class="error" id="otp-error" role="alert" aria-live="polite"></p>
+            <button class="btn" type="submit" id="verify-btn">
+              <span class="label">Verify</span><span class="spinner" aria-hidden="true"></span>
+            </button>
+            <p class="resend">Didn't get it? <button type="button" id="resend" disabled>Resend in 30s</button></p>
+          </form>
+          <p class="demo">Prototype demo — use code <code>123456</code></p>
+        </div>
+
+        <div class="step done" id="step-done" hidden>
+          <div class="check" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h1 id="title-done" tabindex="-1">You're in</h1>
+          <p class="sub">Signed in as <strong id="email-done"></strong></p>
+          <button class="btn ghost" type="button" id="again-btn">Sign out</button>
+        </div>
+      </div>
+    </section>
+    <p class="legal">By continuing you agree to the Terms and Privacy Policy.</p>
+  </main>
+
+<script>
+(function(){
+  var DEMO_CODE = '123456';
+  var $ = function(id){ return document.getElementById(id); };
+  var card = $('card') || document.querySelector('.card');
+  var status = $('status');
+  var steps = { email: $('step-email'), otp: $('step-otp'), done: $('step-done') };
+  var emailForm = $('email-form'), emailInput = $('email'), emailError = $('email-error');
+  var sendBtn = $('send-btn'), verifyBtn = $('verify-btn'), againBtn = $('again-btn');
+  var otpForm = $('otp-form'), otpWrap = $('otp'), otpError = $('otp-error');
+  var inputs = Array.prototype.slice.call(otpWrap.querySelectorAll('input'));
+  var resendBtn = $('resend'), timer = null, left = 0;
+  var emailTouched = false;
+
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    card.addEventListener('pointermove', function(e){
+      var r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100) + '%');
+      card.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100) + '%');
+    });
+  }
+
+  function announce(msg){ status.textContent = ''; setTimeout(function(){ status.textContent = msg; }, 30); }
+  function show(name){
+    Object.keys(steps).forEach(function(k){ steps[k].hidden = (k !== name); });
+    var h = steps[name].querySelector('h1');
+    if (h) h.focus();
+  }
+  function setBusy(btn, form, on){
+    btn.classList.toggle('is-loading', on);
+    btn.disabled = on;
+    form.setAttribute('aria-busy', on ? 'true' : 'false');
+    Array.prototype.forEach.call(form.querySelectorAll('input'), function(i){ i.disabled = on; });
+  }
+  function setError(input, errorEl, msg){
+    errorEl.textContent = msg || '';
+    input.setAttribute('aria-invalid', msg ? 'true' : 'false');
+  }
+  function validEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+  function emailMessage(v){
+    if (!v) return 'Enter your work email so we can send the code.';
+    if (v.indexOf('@') === -1) return 'That address is missing an @ — try you@company.com.';
+    if (!/\.[^\s@]{2,}$/.test(v)) return 'That address is missing a domain — try you@company.com.';
+    return 'That address looks off — check for a typo, then try again.';
+  }
+  function validateEmail(){
+    var v = emailInput.value.trim();
+    if (validEmail(v)){ setError(emailInput, emailError, ''); return true; }
+    setError(emailInput, emailError, emailMessage(v));
+    return false;
+  }
+
+  /* validate on first blur, then live-revalidate while invalid */
+  emailInput.addEventListener('blur', function(){
+    if (!emailInput.value.trim() && !emailTouched) { emailTouched = true; return; }
+    emailTouched = true;
+    validateEmail();
+  });
+  emailInput.addEventListener('input', function(){
+    if (emailInput.getAttribute('aria-invalid') === 'true') validateEmail();
+  });
+
+  emailForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    if (!validateEmail()){ emailInput.focus(); return; }
+    var value = emailInput.value.trim();
+    setBusy(sendBtn, emailForm, true);
+    announce('Sending your code.');
+    setTimeout(function(){
+      setBusy(sendBtn, emailForm, false);
+      $('email-out').textContent = value;
+      $('email-done').textContent = value;
+      inputs.forEach(function(i){ i.value = ''; i.removeAttribute('aria-invalid'); });
+      otpError.textContent = '';
+      show('otp');
+      announce('Code sent. Enter the six-digit code from your email.');
+      startCountdown();
+    }, 700);
+  });
+
+  function code(){ return inputs.map(function(i){ return i.value; }).join(''); }
+  function fillFrom(startIndex, digits){
+    for (var k = 0; k < digits.length && startIndex + k < inputs.length; k++){
+      inputs[startIndex + k].value = digits[k];
+    }
+    inputs[Math.min(startIndex + digits.length, inputs.length - 1)].focus();
+    maybeSubmit();
+  }
+
+  inputs.forEach(function(input, idx){
+    input.addEventListener('input', function(){
+      var digits = input.value.replace(/\D/g, '');
+      if (digits.length > 1){ fillFrom(idx, digits); return; }
+      input.value = digits.slice(0, 1);
+      if (input.value){
+        input.removeAttribute('aria-invalid');
+        if (otpError.textContent){ otpError.textContent = ''; inputs.forEach(function(i){ i.removeAttribute('aria-invalid'); }); }
+        if (idx < inputs.length - 1) inputs[idx + 1].focus();
+      }
+      maybeSubmit();
+    });
+    input.addEventListener('keydown', function(e){
+      if (e.key === 'Backspace' && !input.value && idx > 0){
+        inputs[idx - 1].focus(); inputs[idx - 1].value = ''; e.preventDefault();
+      }
+      if (e.key === 'ArrowLeft' && idx > 0){ inputs[idx - 1].focus(); e.preventDefault(); }
+      if (e.key === 'ArrowRight' && idx < inputs.length - 1){ inputs[idx + 1].focus(); e.preventDefault(); }
+    });
+    input.addEventListener('paste', function(e){
+      var text = (e.clipboardData || window.clipboardData).getData('text') || '';
+      var digits = text.replace(/\D/g, '');
+      if (digits){ e.preventDefault(); fillFrom(idx, digits.slice(0, inputs.length - idx)); }
+    });
+  });
+
+  var autoTimer = null;
+  function maybeSubmit(){
+    if (code().length !== 6) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(function(){ otpForm.requestSubmit(); }, 220);
+  }
+
+  otpForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    otpError.textContent = '';
+    var value = code();
+    if (value.length !== 6){
+      otpError.textContent = 'Enter all six digits from the email we sent.';
+      inputs.forEach(function(i){ if (!i.value) i.setAttribute('aria-invalid', 'true'); });
+      var firstEmpty = inputs.filter(function(i){ return !i.value; })[0];
+      if (firstEmpty) firstEmpty.focus();
+      return;
+    }
+    setBusy(verifyBtn, otpForm, true);
+    announce('Checking your code.');
+    setTimeout(function(){
+      setBusy(verifyBtn, otpForm, false);
+      if (value === DEMO_CODE){
+        show('done');
+        announce("You're signed in as " + $('email-done').textContent + '.');
+      } else {
+        otpError.textContent = 'That code has expired or is not correct. Check the latest email, or request a new code.';
+        inputs.forEach(function(i){ i.value = ''; i.setAttribute('aria-invalid', 'true'); });
+        inputs[0].focus();
+        announce('Code not accepted. Try again or request a new code.');
+      }
+    }, 650);
+  });
+
+  function startCountdown(){
+    left = 30;
+    resendBtn.disabled = true;
+    resendBtn.textContent = 'Resend in ' + left + 's';
+    clearInterval(timer);
+    timer = setInterval(function(){
+      left -= 1;
+      if (left <= 0){
+        clearInterval(timer);
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend code';
+      } else {
+        resendBtn.textContent = 'Resend in ' + left + 's';
+      }
+    }, 1000);
+  }
+
+  resendBtn.addEventListener('click', function(){
+    if (resendBtn.disabled) return;
+    otpError.textContent = '';
+    resendBtn.textContent = 'Sending...';
+    resendBtn.disabled = true;
+    announce('Sending a new code.');
+    setTimeout(startCountdown, 600);
+  });
+
+  $('back-btn').addEventListener('click', function(){
+    clearInterval(timer);
+    show('email');
+    emailInput.focus();
+  });
+
+  againBtn.addEventListener('click', function(){
+    clearInterval(timer);
+    emailInput.value = '';
+    emailTouched = false;
+    setError(emailInput, emailError, '');
+    inputs.forEach(function(i){ i.value = ''; i.removeAttribute('aria-invalid'); });
+    show('email');
+    announce('Signed out.');
+  });
+})();
+</script>
+</body>
+</html>
