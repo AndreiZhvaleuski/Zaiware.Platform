@@ -211,9 +211,9 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   image ships no trusted ASP.NET Core HTTPS development certificate. Use the
   `http` launch profile; the sandbox publishes loopback ports only.
 - Telemetry: `ASPIRE_CLI_TELEMETRY_OPTOUT=true`.
-- Updates: the CLI is image-managed. `aspire update --self` cannot replace the
-  read-only install under `/usr/local/bin`; bump `aspireVersion` and recreate
-  the sandbox.
+- Updates: `aspire update --self` works in the running sandbox because the
+  install lives in `~/.aspire/bin`, but the change is lost on `sbx env rm`.
+  Bump `aspireVersion` for the image.
 
 The build downloads the CLI from `aspire.dev` and the matching GitHub release
 on the host, so it needs host network access; the sandbox itself only needs the

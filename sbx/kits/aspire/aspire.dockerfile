@@ -17,18 +17,28 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl tar gzip libicu76 \
  && rm -rf /var/lib/apt/lists/*
 
-# Install into /usr/local/bin so the executable, the libhex1b interop library,
-# and the install-route sidecar stay together on PATH. --skip-path is required:
-# the script otherwise edits a shell profile we do not ship. --version pins the
-# release; --quality is only for "latest of a channel" and the script rejects
-# the two together.
+# Install with the script's default user-local layout. The CLI derives its log,
+# state, and bundle directories from the install root (for example
+# <root>/logs and <root>/cli), so a system path such as /usr/local/bin would
+# make it write /usr/local/logs and /usr/local/cli, which the agent cannot
+# create. ~/.aspire is writable by the agent, and the symlink puts the CLI on
+# the standard PATH.
+#
+# --skip-path is required: the script otherwise edits a shell profile we do not
+# ship. --version pins the release; --quality is only for "latest of a channel"
+# and the script rejects the two together.
 RUN curl -fsSL https://aspire.dev/install.sh -o /tmp/aspire-install.sh \
  && bash /tmp/aspire-install.sh \
-      --install-path /usr/local/bin \
+      --install-path /home/agent/.aspire/bin \
       --version "$ASPIRE_VERSION" \
       --skip-path \
- && /usr/local/bin/aspire --version
+ && ln -s /home/agent/.aspire/bin/aspire /usr/local/bin/aspire \
+ && /usr/local/bin/aspire --version \
+ && chown -R 1000:1000 /home/agent/.aspire/bin
 
-# The overlay. Everything outside /out is the workload's, untouched.
+# The overlay. Everything outside /out is the workload's, untouched. Copy only
+# the install directory (not the build-time logs) and the /usr/local/bin
+# symlink. A directory COPY preserves the symlink.
 FROM scratch
+COPY --from=build /home/agent/.aspire/bin /home/agent/.aspire/bin
 COPY --from=build /usr/local/bin /usr/local/bin
