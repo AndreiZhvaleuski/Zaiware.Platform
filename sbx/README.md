@@ -204,14 +204,11 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   dotnet kit must be in the same sandbox. It also relies on the `DOTNET_ROOT`
   exported by `kits/dotnet`; DCP launches the built apphost binary directly,
   and that binary does not infer the muxer root from `/usr/local/bin/dotnet`.
-- Proxy: `DCP_IP_VERSION_PREFERENCE=IPv4` makes DCP use `127.0.0.1` instead of
-  `[::1]`. The sandbox proxy does not bypass the bracketed IPv6 literal, so
-  DCP's connection check fails with a 502 by default. Preferring IPv4 keeps the
-  traffic on `127.0.0.1`, which `NO_PROXY` already covers. Do not add `[::1]`
-  to `NO_PROXY`: some clients parse it as a regex and can lose their proxy.
-  `NO_PROXY` and `no_proxy` also carry `.localhost` and `.dev.localhost`. To
-  add host-specific bypasses, override `noProxy` and `noProxyLower` on the kit
-  entry; keep `.localhost` and `gateway.docker.internal`.
+- Proxy: the mixin does **not** override `NO_PROXY`.
+  `DCP_IP_VERSION_PREFERENCE=IPv4` makes DCP use `127.0.0.1` instead of
+  `[::1]`, which the sandbox proxy does not bypass. `127.0.0.1` and
+  `localhost` are already in the sandbox's `NO_PROXY`. Do not add `[::1]`:
+  some clients parse it as a regex and can lose their proxy.
 - Transport: `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is exported because the
   image ships no trusted ASP.NET Core HTTPS development certificate. Use the
   `http` launch profile; the sandbox publishes loopback ports only.

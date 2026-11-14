@@ -30,12 +30,10 @@ development certificate, and the sandbox only publishes loopback ports.
   that DCP starts directly exits with "You must install .NET to run this
   application". Do not clear it.
 - `DCP_IP_VERSION_PREFERENCE=IPv4` makes DCP use `127.0.0.1` instead of
-  `[::1]`. The proxy does not bypass the bracketed IPv6 literal, so this keeps
-  DCP's loopback calls on an address `NO_PROXY` already covers. Do not add
-  `[::1]` to `NO_PROXY`: some clients parse it as a regex and can lose their
-  proxy.
-- `NO_PROXY` / `no_proxy` also contain `.localhost` and `.dev.localhost` for
-  the launch-profile hostnames. Keep those entries when changing the list.
+  `[::1]`. The proxy does not bypass the bracketed IPv6 literal, and the
+  sandbox's own `NO_PROXY` already covers `127.0.0.1` and `localhost`, so the
+  mixin leaves `NO_PROXY` untouched. Do not add `[::1]`: some clients parse it
+  as a regex and can lose their proxy.
 - The AppHost uses the Docker daemon exposed in the sandbox, so container
   resources show up in `docker ps`. Project resources run as local processes
   and publish their endpoints on sandbox loopback.

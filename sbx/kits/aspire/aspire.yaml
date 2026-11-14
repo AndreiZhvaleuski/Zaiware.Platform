@@ -13,12 +13,11 @@
 #     through its /usr/local/bin symlink, but the apphost executable that
 #     Aspire/DCP launches directly searches DOTNET_ROOT and exits with
 #     "You must install .NET to run this application" without it.
-#   * NO_PROXY: the sandbox resolves *.localhost to ::1 (see AGENTS.md), and
-#     Aspire/DCP would normally address local services as [::1]. The sandbox
-#     proxy does not bypass the bracketed literal, so those calls fail. Instead
-#     of adding [::1] to NO_PROXY (which some clients parse as a regex and
-#     break their proxy), this mixin sets DCP_IP_VERSION_PREFERENCE=IPv4:
-#     DCP's endpoints become 127.0.0.1, which the normal NO_PROXY entries cover.
+#   * DCP endpoints: DCP normally binds [::1], which the sandbox proxy does not
+#     bypass. DCP_IP_VERSION_PREFERENCE=IPv4 makes it use 127.0.0.1, which the
+#     sandbox's own NO_PROXY already covers. The mixin does not override
+#     NO_PROXY: clients that parse it as a regex can lose their proxy, and the
+#     sandbox may add its own bypass entries.
 #
 # ASPIRE_ALLOW_UNSECURED_TRANSPORT is for the AppHost's `http` launch profile.
 # The image ships no trusted ASP.NET Core HTTPS development certificate, and the
@@ -62,21 +61,6 @@ args:
     default: "IPv4"
     description: Prefer IPv4 for DCP endpoints so loopback traffic bypasses the proxy
     env: DCP_IP_VERSION_PREFERENCE
-
-  # Both spellings are exported because clients disagree about which one they
-  # read. Keep the sandbox's own entries (localhost, 127.0.0.1, ::1,
-  # gateway.docker.internal); .localhost covers zaiware-platform.dev.localhost
-  # and other launch profiles. Do not add [::1]: it is a regex character class
-  # to some clients and can disable their proxy.
-  noProxy:
-    default: "localhost,127.0.0.1,::1,gateway.docker.internal,.localhost,.dev.localhost"
-    description: Proxy bypasses for local endpoints (uppercase form)
-    env: NO_PROXY
-
-  noProxyLower:
-    default: "localhost,127.0.0.1,::1,gateway.docker.internal,.localhost,.dev.localhost"
-    description: Proxy bypasses for local endpoints (lowercase form)
-    env: no_proxy
 
   cliTelemetryOptOut:
     default: "true"
