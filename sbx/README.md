@@ -12,7 +12,7 @@ placeholder for the real value on outbound requests.
 | `../sbxenv.yaml` | Environment file: agent, workspace, kits, args, ports, bindings. Must stay at the workspace root. |
 | `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for DeepSeek and OpenCode Go. |
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
-| `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`). |
+| `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`) and persists OpenCode data across recreation (`volume@1`). |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 
 Split rationale: `opencode.json` is *agent* configuration and belongs in the
@@ -109,6 +109,33 @@ The first `sbx env run` asks you to approve a credential binding for each
 service (domains `api.deepseek.com` and `opencode.ai`). The file pre-declares
 them, so approval is normally silent.
 
+## Session data
+
+`kits/opencode-server` declares a `volume@1` at
+`/home/agent/.local/share/opencode`. That is where OpenCode keeps the session
+database, messages, logs, snapshots, and `auth.json`, so `sbx env rm` followed
+by `sbx env run` reattaches the same data as long as the sandbox name stays
+`zaiware-platform`.
+
+- The volume is keyed by sandbox name, not kit version. Updating the kit or
+  the OpenCode version and recreating keeps the history.
+- The path assumes OpenCode's default data directory (`XDG_DATA_HOME` unset).
+  If you set `XDG_DATA_HOME`, move the volume path to match.
+- `sbx env rm` keeps the volume by default; deleting it is explicit (`sbx volume ls` on
+  the host lists retained volumes, `sbx volume rm` deletes one). A different
+  sandbox name starts with a fresh volume.
+- The first sandbox created with this kit starts with an empty volume.
+  History that lived in the old sandbox's home directory is not migrated
+  automatically. Export sessions you want to keep before removing that
+  sandbox with `opencode session export <session-id>`, then import them after
+  recreation with `opencode session import <file> --directory <workspace>`.
+- Verify after recreation with `sbx env exec -- opencode session list`.
+- The volume is private to the sandbox and not visible in the workspace. If
+  you want to inspect or back it up from the host instead, replace the
+  `volume@1` entry with `host-mount@1` at the same path and select a host
+  directory with `mounts:` in `sbxenv.yaml` (requires sbx v0.50 or later).
+  Do not declare both at the same path.
+
 ## .NET SDK
 
 `kits/dotnet` bakes a dotnetup-managed SDK into the image at build time. It is
@@ -148,9 +175,10 @@ sbx env exec -- dotnetup list
 sbx env exec -- bash -lc 'dotnet build Zaiware.Platform.slnx'
 ```
 
-A Kit change takes effect only when the sandbox is created again. `sbx env rm`
-also deletes the sandbox's OpenCode history (`~/.local/share/opencode/opencode.db`),
-so copy it out first if it matters.
+A Kit change takes effect only when the sandbox is created again. OpenCode's
+data directory is a persistent volume (see [Session data](#session-data)), so
+later recreations keep it. The first create after this change starts with an
+empty volume; export history from the old sandbox first if it matters.
 
 ## Verify
 
@@ -179,8 +207,8 @@ If `anon` returns 200, the password did not reach the server: `cmd:` is the
 launch command, so it must be set in `sbxenv.yaml` (the server reads
 `OPENCODE_SERVER_PASSWORD` from the workload environment).
 
-Never run `/connect` in this sandbox — that stores the real key in
-`~/.local/share/opencode/opencode.db` as plaintext.
+Never run `/connect` in this sandbox — that stores the real key in the
+persisted OpenCode database (`~/.local/share/opencode/opencode.db`) as plaintext.
 
 ## Models
 
@@ -194,7 +222,7 @@ Never run `/connect` in this sandbox — that stores the real key in
 
 - Secrets are host-scoped, so recreating the sandbox keeps them: `sbx env rm && sbx env run`.
 - Rotating a key: `sbx secret set deepseek` again. Placeholders are stable, so no restart is needed.
-- Session history lives in the sandbox (`~/.local/share/opencode/opencode.db`) and is lost on `sbx rm`. Copy it out if it matters.
+- Session history is stored in a kit volume (`~/.local/share/opencode`), so `sbx env rm && sbx env run` keeps sessions under the same sandbox name. A different name starts empty.
 - Do not run `sbx reset` — it deletes all stored host secrets.
 
 ## Protecting this directory

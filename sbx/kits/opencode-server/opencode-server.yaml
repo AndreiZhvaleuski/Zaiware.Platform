@@ -16,10 +16,25 @@ displayName: OpenCode server lifecycle
 # without OPENCODE_SERVER_PASSWORD (no basic auth) and without the provider
 # credential sentinels it needs to reach the model APIs. The cd sets the
 # server's project root to the mounted workspace instead of the image WORKDIR.
+#
+# OpenCode stores sessions, messages, auth, logs, and snapshots under
+# ~/.local/share/opencode, its default when XDG_DATA_HOME is unset. volume@1
+# gives that directory a block volume keyed by sandbox name, so `sbx env rm`
+# followed by `sbx env run` reattaches the same data. The install hook owns a
+# freshly created mount root before any agent hook writes to it.
 
 capabilities:
+  - type: com.docker.sandbox/volume@1
+    config:
+      path: /home/agent/.local/share/opencode
+      mode: "0755"
+
   - type: com.docker.sandbox/lifecycle@1
     config:
+      install:
+        - command: install -d -o agent -g agent -m 0755 /home/agent/.local/share/opencode
+          user: "0"
+          description: Make the OpenCode data volume writable by agent
       startup:
         - command: cd "$WORKSPACE_DIR" && exec opencode serve --hostname 0.0.0.0 --port 4096
           env:

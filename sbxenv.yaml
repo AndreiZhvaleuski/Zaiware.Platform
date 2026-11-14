@@ -45,7 +45,8 @@ env:
 kits:
   # Network access + credential injection. Adds no files to the image.
   - ./sbx/kits/provider-keys
-  # Keeps the sandbox (and the server) alive after the last client disconnects.
+  # Keeps the sandbox (and the server) alive after the last client disconnects,
+  # and persists OpenCode state in a volume across sandbox recreation.
   - ./sbx/kits/opencode-server
   - ./sbx/kits/dotnet
   
