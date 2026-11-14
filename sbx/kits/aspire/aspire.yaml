@@ -15,10 +15,10 @@
 #     DCP_IP_VERSION_PREFERENCE=IPv4 makes it use 127.0.0.1, which the
 #     sandbox's own NO_PROXY already covers.
 #
-# The Kit declares `provides` but no `requires`. The dotnet Kit is listed before
-# this one in sbxenv.yaml. `requires` is omitted because any requirement (even a
-# bare name) reproduced the environment failure; `provides` is declarative and
-# was not implicated. No network-policy either: the dotnet Kit already grants
+# The Kit declares `provides` but no `requires`. The dotnet Kit must be present;
+# list it before this one in sbxenv.yaml. `requires` is valid v3 and resolved at
+# sandbox creation, but it is not adopted until the isolated probe in
+# sbx/MIXINS.md passes. No network-policy either: the dotnet Kit already grants
 # NuGet restore, and the Docker daemon pulls the dashboard/Postgres images.
 #
 # ASPIRE_ALLOW_UNSECURED_TRANSPORT is for the AppHost's `http` launch profile.

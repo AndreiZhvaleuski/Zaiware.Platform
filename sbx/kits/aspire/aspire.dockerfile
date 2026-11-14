@@ -10,29 +10,40 @@ FROM debian:trixie-slim AS build
 
 ARG ASPIRE_VERSION=13.6.4
 
+# Build-only. Docker builds run as root with HOME=/root; the installers choose
+# their default paths from HOME. Do not set this at runtime.
+ENV HOME=/home/agent
+
 # libicu76 is for the sanity check: the NativeAOT CLI needs ICU to load its
-# resources. The sandbox gets ICU from the dotnet Kit, which this mixin
-# requires, so do not copy those libraries into the overlay.
+# resources. The sandbox gets ICU from the dotnet Kit, so do not copy those
+# libraries into the overlay.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl tar gzip libicu76 \
  && rm -rf /var/lib/apt/lists/*
 
-# Install into ~/.local/bin: the OpenCode workload already puts that directory
-# on PATH, so no symlink or /usr/local/bin copy is needed. The CLI derives its
-# log, state, and bundle directories from the install root (~/.local), which is
-# owned by the agent and stays writable.
+# Install at the official default, $HOME/.aspire/bin. The script writes
+# .aspire-install.json next to the binary; for a script install the CLI keeps
+# logs, cache, hives, and versions in the parent (~/.aspire), which is writable
+# by the agent.
 #
 # --skip-path is required: the script otherwise edits a shell profile we do not
-# ship. --version pins the release; --quality is only for "latest of a channel"
-# and the script rejects the two together.
+# ship. --version pins the release.
 RUN curl -fsSL https://aspire.dev/install.sh -o /tmp/aspire-install.sh \
  && bash /tmp/aspire-install.sh \
-      --install-path /home/agent/.local/bin \
       --version "$ASPIRE_VERSION" \
       --skip-path \
- && /home/agent/.local/bin/aspire --version \
- && chown -R 1000:1000 /home/agent/.local/bin
+ && /home/agent/.aspire/bin/aspire --version \
+ && rm -rf /home/agent/.aspire/logs /home/agent/.aspire/cache \
+ && chown -R 1000:1000 /home/agent/.aspire
+
+# Copy the install tree (bin only) and expose it through the standard PATH
+# directory. Do not copy state directories into the image.
+RUN mkdir -p /out/usr/local/bin /out/home/agent/.aspire \
+ && cp -a /home/agent/.aspire/bin /out/home/agent/.aspire/ \
+ && ln -s /home/agent/.aspire/bin/aspire /out/usr/local/bin/aspire \
+ && chown 1000:1000 /out/home/agent /out/home/agent/.aspire \
+ && chown -R 1000:1000 /out/home/agent/.aspire/bin
 
 # The overlay. Everything outside /out is the workload's, untouched.
 FROM scratch
-COPY --from=build /home/agent/.local/bin /home/agent/.local/bin
+COPY --from=build /out /
