@@ -52,6 +52,9 @@ kits:
   # Aspire CLI and the environment an AppHost needs (DOTNET_ROOT, NO_PROXY,
   # HTTP transport). Requires the dotnet kit above.
   - ./sbx/kits/aspire
+  # OpenSpec CLI (standalone binary, no Node). Project artifacts under
+  # openspec/ and .agents/skills come from `openspec init` in the repo.
+  - ./sbx/kits/openspec
   
 # Publish the API server on host loopback only, explicitly.
 ports:

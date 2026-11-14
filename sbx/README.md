@@ -13,6 +13,7 @@ placeholder for the real value on outbound requests.
 | `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for DeepSeek and OpenCode Go. |
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
 | `kits/aspire/aspire.yaml` | Mixin: Aspire CLI (official install script) plus the runtime environment an AppHost needs. |
+| `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node) plus egress for `openspec update`. |
 | `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`) and persists OpenCode data across recreation (`volume@1`). |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 
@@ -265,6 +266,57 @@ loopback.
 
 A Kit change takes effect only when the sandbox is created again
 (`sbx env rm && sbx env run`); the OpenCode data volume keeps its sessions.
+
+## OpenSpec
+
+`kits/openspec` installs the OpenSpec CLI with OpenSpec's official standalone
+installer (`openspec.dev/cli/install.sh`) and bakes it into the image. The
+release is a native binary, so no Node.js runtime is involved; the installer
+also verifies the archive against the release's `SHA256SUMS`. The version is
+pinned by `openspecVersion`.
+
+- Location: `~/.local/bin/openspec`, which is already on the OpenCode
+  workload's `PATH`. No symlink, shell profile, or startup hook is needed.
+- Why baked: the sandbox is recreated routinely, and an install performed at
+  runtime (or by hand in `~/.local/bin`) lives in the sandbox's writable layer,
+  so it disappears on `sbx env rm`. A mixin layer is part of the image digest.
+- Updates: bump `openspecVersion` and recreate. `openspec update` still works
+  in-sandbox to refresh the project's generated skills; if it offers to install
+  a newer CLI, that copy is lost on the next recreate, so prefer bumping the
+  pin. The mixin grants the hosts `openspec update` and `openspec install` use
+  (`openspec.dev`, GitHub, and the release asset hosts).
+- No state volume: the artifacts that matter (`openspec/`, the `openspec-*`
+  skills, and the OpenCode command shims) are written into the workspace by
+  `openspec init` and versioned with the repo. `~/.config/openspec` holds only
+  disposable per-machine settings.
+- Telemetry: the mixin exports `OPENSPEC_TELEMETRY=0` (override the
+  `telemetry` arg to change it). The sandbox grants no telemetry host anyway,
+  so this mostly keeps the first-run notice out of command output.
+
+The project side is currently initialized locally with the OpenCode target:
+
+```text
+openspec/config.yaml                       project schema and context
+openspec/specs/                            current specs
+openspec/changes/                          in-motion changes (archive/ inside)
+.agents/skills/openspec-*/                 the six workflow skills
+.opencode/commands/openspec-*.md           command shims that load those skills
+```
+
+Those files are deliberately left untracked for now; the Kit only supplies the
+CLI binary. A fresh checkout must run `openspec init --tools opencode` before
+OpenCode discovers the workflow skills.
+
+Verify after the next sandbox creation:
+
+```powershell
+sbx env exec -- openspec version
+sbx env exec -- bash -lc 'cd "$WORKSPACE_DIR" && openspec list'
+```
+
+`openspec version` must print `OpenSpec 2.0.0 (standalone)`. Restart OpenCode
+after a recreation so it reloads `.agents/skills`; then `/openspec-propose` (or
+asking the agent to use the matching skill) is available.
 
 ## Verify
 

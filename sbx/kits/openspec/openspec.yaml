@@ -1,0 +1,55 @@
+# syntax=docker/sandbox-kit:3
+# OpenSpec CLI for the sandbox, installed with OpenSpec's official standalone
+# installer (no Node.js runtime).
+#
+# Why baked and not a startup hook: a Kit layer is part of the image digest, so
+# every `sbx env rm` / `sbx env run` gets the same binary with no download. The
+# version is pinned by `openspecVersion`; bump it and recreate to upgrade.
+#
+# The installer verifies the release archive against the release's SHA256SUMS
+# and drops the native binary in ~/.local/bin, which the OpenCode workload
+# already has on PATH. The binary needs only glibc, which the workload ships.
+#
+# Project state does not live here: `openspec init` writes openspec/,
+# .agents/skills/openspec-*, and .opencode/commands/openspec-* into the
+# workspace, so they survive recreation with the repository. The CLI's own
+# per-machine state (~/.config/openspec) is disposable, so no volume is needed.
+schemaVersion: "3"
+displayName: OpenSpec CLI
+description: >-
+  The OpenSpec CLI, installed with OpenSpec's standalone installer (no Node.js
+  needed), plus network access for in-sandbox `openspec update` and reinstall.
+sourceUrl: https://openspec.dev/docs/installation
+licenses: [MIT]
+
+kind: mixin
+
+provides:
+  - "openspec@${{ kit.args.openspecVersion }}"
+
+args:
+  openspecVersion:
+    default: "2.0.0"
+    pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+    description: Exact OpenSpec CLI version to install
+    buildArg: OPENSPEC_VERSION
+
+  telemetry:
+    default: "0"
+    description: Anonymous usage telemetry (0 disables it; the sandbox grants no telemetry host)
+    env: OPENSPEC_TELEMETRY
+
+capabilities:
+  # The CLI itself is local. These grants are for `openspec update` (refreshes
+  # the project's generated skills), its version check, and an `openspec
+  # install` reinstall from inside the sandbox. GitHub redirects release assets
+  # to the two asset hosts below.
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - openspec.dev:443
+          - github.com:443
+          - api.github.com:443
+          - objects.githubusercontent.com:443
+          - release-assets.githubusercontent.com:443
