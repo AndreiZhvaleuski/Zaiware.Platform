@@ -14,11 +14,17 @@
 # .agents/skills/openspec-*, and .opencode/commands/openspec-* into the
 # workspace, so they survive recreation with the repository. The CLI's own
 # per-machine state (~/.config/openspec) is disposable, so no volume is needed.
+#
+# No network-policy capability on purpose. The OpenCode workload already allows
+# github.com, api.github.com, and *.githubusercontent.com, which is all
+# `openspec update` needs. The installer itself runs at image build time on the
+# host. openspec.dev is not granted, so an in-sandbox `openspec install`
+# self-update is not available; bump `openspecVersion` instead.
 schemaVersion: "3"
 displayName: OpenSpec CLI
 description: >-
   The OpenSpec CLI, installed with OpenSpec's standalone installer (no Node.js
-  needed), plus network access for in-sandbox `openspec update` and reinstall.
+  needed). Adds no network rules of its own.
 sourceUrl: https://openspec.dev/docs/installation
 licenses: [MIT]
 
@@ -38,18 +44,3 @@ args:
     default: "0"
     description: Anonymous usage telemetry (0 disables it; the sandbox grants no telemetry host)
     env: OPENSPEC_TELEMETRY
-
-capabilities:
-  # The CLI itself is local. These grants are for `openspec update` (refreshes
-  # the project's generated skills), its version check, and an `openspec
-  # install` reinstall from inside the sandbox. GitHub redirects release assets
-  # to the two asset hosts below.
-  - type: com.docker.sandbox/network-policy@1
-    config:
-      runtime:
-        allow:
-          - openspec.dev:443
-          - github.com:443
-          - api.github.com:443
-          - objects.githubusercontent.com:443
-          - release-assets.githubusercontent.com:443

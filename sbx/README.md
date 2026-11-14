@@ -13,7 +13,7 @@ placeholder for the real value on outbound requests.
 | `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for DeepSeek and OpenCode Go. |
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
 | `kits/aspire/aspire.yaml` | Mixin: Aspire CLI (official install script) plus the runtime environment an AppHost needs. |
-| `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node) plus egress for `openspec update`. |
+| `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node); declares no network rules. |
 | `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`) and persists OpenCode data across recreation (`volume@1`). |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 
@@ -283,17 +283,32 @@ pinned by `openspecVersion`.
 - Updates: bump `openspecVersion` and recreate. `openspec update` still works
   in-sandbox to refresh the project's generated skills; if it offers to install
   a newer CLI, that copy is lost on the next recreate, so prefer bumping the
-  pin. The mixin grants the hosts `openspec update` and `openspec install` use
-  (`openspec.dev`, GitHub, and the release asset hosts).
+  pin. The mixin declares no network rules: the OpenCode workload already
+  allows `github.com`, `api.github.com`, and `*.githubusercontent.com`, which
+  is what `openspec update` needs. `openspec.dev` is not granted, so an
+  in-sandbox `openspec install` self-update is not available.
 - No state volume: the artifacts that matter (`openspec/`, the `openspec-*`
   skills, and the OpenCode command shims) are written into the workspace by
-  `openspec init` and versioned with the repo. `~/.config/openspec` holds only
+  `openspec init`, not into the sandbox. `~/.config/openspec` holds only
   disposable per-machine settings.
 - Telemetry: the mixin exports `OPENSPEC_TELEMETRY=0` (override the
   `telemetry` arg to change it). The sandbox grants no telemetry host anyway,
   so this mostly keeps the first-run notice out of command output.
+- If the client cannot connect after adding this Kit, confirm the sandbox was
+  recreated, not just reattached: `sbx env rm` then `sbx env run --detach`.
+  `sbx env run` against an existing sandbox can apply a Kit change without
+  re-running the `opencode-server` boot hook, which leaves `opencode serve`
+  down. A recreated sandbox writes a new `cli starting ... "serve"` line to
+  `~/.local/share/opencode/log/opencode.log`.
 
-The project side is currently initialized locally with the OpenCode target:
+The Kit only supplies the CLI binary. Create the project side at the repo
+root with:
+
+```powershell
+openspec init --tools opencode
+```
+
+That writes:
 
 ```text
 openspec/config.yaml                       project schema and context
@@ -303,9 +318,9 @@ openspec/changes/                          in-motion changes (archive/ inside)
 .opencode/commands/openspec-*.md           command shims that load those skills
 ```
 
-Those files are deliberately left untracked for now; the Kit only supplies the
-CLI binary. A fresh checkout must run `openspec init --tools opencode` before
-OpenCode discovers the workflow skills.
+Those files are deliberately left untracked for now. OpenCode discovers the
+workflow skills from the workspace, so a fresh checkout must run
+`openspec init --tools opencode` before they are available.
 
 Verify after the next sandbox creation:
 
