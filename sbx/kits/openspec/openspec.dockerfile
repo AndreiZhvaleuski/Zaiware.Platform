@@ -13,22 +13,30 @@ FROM debian:trixie-slim AS build
 
 ARG OPENSPEC_VERSION=2.0.0
 
+# Build-only. Docker builds run as root with HOME=/root; the installer chooses
+# its default path from HOME. Do not set this at runtime.
+ENV HOME=/home/agent
+
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl tar gzip \
  && rm -rf /var/lib/apt/lists/*
 
-# Install into /usr/local/bin, not ~/.local/bin. The aspire Kit already owns
-# ~/.local/bin; keeping this Kit out of that directory means the two mixins
-# never overlay the same path. /usr/local/bin is on the workload PATH, and the
-# binary is only read from there. The script stages the download inside the
-# target directory (so the swap is atomic), which is why it must exist and be
-# writable here.
+# Install at the official default, $HOME/.local/bin. The installer stages its
+# download inside that directory, so the build runs as root and the file is
+# chowned afterward. The release archive ships uid/gid 1001.
 RUN curl -fsSL https://openspec.dev/cli/install.sh -o /tmp/openspec-install.sh \
- && OPENSPEC_VERSION="$OPENSPEC_VERSION" \
-    OPENSPEC_INSTALL_DIR=/usr/local/bin \
-      sh /tmp/openspec-install.sh \
- && /usr/local/bin/openspec --version
+ && OPENSPEC_VERSION="$OPENSPEC_VERSION" sh /tmp/openspec-install.sh \
+ && /home/agent/.local/bin/openspec --version \
+ && chown 1000:1000 /home/agent/.local/bin/openspec
+
+# Expose the binary through /usr/local/bin. Keep ~/.local/bin root-owned so the
+# agent cannot shadow other tools there; only the binary is uid 1000.
+RUN mkdir -p /out/usr/local/bin /out/home/agent/.local/bin \
+ && cp -a /home/agent/.local/bin/openspec /out/home/agent/.local/bin/ \
+ && ln -s /home/agent/.local/bin/openspec /out/usr/local/bin/openspec \
+ && chown 1000:1000 /out/home/agent /out/home/agent/.local \
+ && chown 1000:1000 /out/home/agent/.local/bin/openspec
 
 # The overlay. Everything outside /out is the workload's, untouched.
 FROM scratch
-COPY --from=build /usr/local/bin/openspec /usr/local/bin/openspec
+COPY --from=build /out /

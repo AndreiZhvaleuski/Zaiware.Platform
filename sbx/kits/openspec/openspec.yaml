@@ -7,21 +7,18 @@
 # version is pinned by `openspecVersion`; bump it and recreate to upgrade.
 #
 # The installer verifies the release archive against the release's SHA256SUMS
-# and drops the native binary in /usr/local/bin, which the OpenCode workload
-# already has on PATH. The binary needs only glibc, which the workload ships.
-# It is installed there rather than ~/.local/bin so this Kit never overlays a
-# directory the aspire Kit also owns.
+# and drops the native binary in the official default, ~/.local/bin, which the
+# OpenCode workload already has on PATH. The binary needs only glibc, which the
+# workload ships. A /usr/local/bin symlink gives every kit the same PATH entry.
 #
-# Project state does not live here: `openspec init` writes openspec/,
-# .agents/skills/openspec-*, and .opencode/commands/openspec-* into the
-# workspace, so they survive recreation with the repository. The CLI's own
-# per-machine state (~/.config/openspec) is disposable, so no volume is needed.
+# Project state does not live here: `openspec init` writes openspec/ and
+# .agents/skills/openspec-* into the workspace, so they survive recreation with
+# the repository. The CLI's per-machine state (~/.config/openspec and
+# ~/.local/share/openspec) is disposable, so no volume is needed.
 #
 # No network-policy capability on purpose. The OpenCode workload already allows
-# github.com, api.github.com, and *.githubusercontent.com, which is all
-# `openspec update` needs. The installer itself runs at image build time on the
-# host. openspec.dev is not granted, so an in-sandbox `openspec install`
-# self-update is not available; bump `openspecVersion` instead.
+# github.com, api.github.com, and *.githubusercontent.com. The installer itself
+# runs at image build time on the host.
 schemaVersion: "3"
 displayName: OpenSpec CLI
 description: >-
@@ -38,6 +35,6 @@ provides:
 args:
   openspecVersion:
     default: "2.0.0"
-    pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
-    description: Exact OpenSpec CLI version to install
+    pattern: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
+    description: Exact OpenSpec CLI version to install (bare or v-prefixed)
     buildArg: OPENSPEC_VERSION
