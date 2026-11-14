@@ -49,8 +49,8 @@ kits:
   # and persists OpenCode state in a volume across sandbox recreation.
   - ./sbx/kits/opencode-server
   - ./sbx/kits/dotnet
-  # Aspire CLI and the environment an AppHost needs (DOTNET_ROOT, NO_PROXY,
-  # HTTP transport). Requires the dotnet kit above.
+  # Aspire CLI and the environment an AppHost needs (DOTNET_ROOT, DCP IPv4,
+  # HTTP transport). Must be listed after the dotnet kit.
   - ./sbx/kits/aspire
   # OpenSpec CLI (standalone binary, no Node). Project artifacts under
   # openspec/ and .agents/skills come from `openspec init` in the repo.

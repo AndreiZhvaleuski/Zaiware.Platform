@@ -11,11 +11,12 @@ displayName: OpenCode server lifecycle
 # is torn down when the session ends. Why not a plain background process either:
 # only a boot hook is restarted by the runtime, not by the client.
 #
-# The env list is not optional: a lifecycle@1 hook sees only the variable names
-# it declares (plus PATH, HOME, PWD, ...). Without them the server starts
-# without OPENCODE_SERVER_PASSWORD (no basic auth) and without the provider
-# credential sentinels it needs to reach the model APIs. The cd sets the
-# server's project root to the mounted workspace instead of the image WORKDIR.
+# Install hooks are deny-by-default. In sbx, startup hooks receive the full
+# sandbox environment; the v3 spec says deny-by-default. Keep this list for
+# portability and to document what the server needs. Without it, a
+# spec-conformant runtime starts without OPENCODE_SERVER_PASSWORD (no basic
+# auth) and without the provider credential sentinels. The cd sets the server's
+# project root to the mounted workspace instead of the image WORKDIR.
 #
 # OpenCode stores sessions, messages, auth, logs, and snapshots under
 # ~/.local/share/opencode, its default when XDG_DATA_HOME is unset. volume@1
