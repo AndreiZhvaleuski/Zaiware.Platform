@@ -244,20 +244,20 @@ DCP uses the Docker daemon exposed in the sandbox, so `postgres` and `pgAdmin`
 appear in `docker ps`; project resources run as local processes. Everything
 stays inside the sandbox.
 
-The `http` launch profile puts the dashboard at
-`http://zaiware-platform.dev.localhost:15154`. `sbxenv.yaml` publishes 15154 on
-host loopback; for an existing sandbox, add it manually:
+The `http` launch profile runs the dashboard inside the sandbox at
+`http://zaiware-platform.dev.localhost:15154`. It is deliberately not published
+to the host. Use the Aspire CLI from inside the sandbox for inspection:
 
 ```powershell
-sbx ports zaiware-platform --publish 15154:15154
+sbx env exec -- aspire describe
+sbx env exec -- aspire logs identity-server
+sbx env exec -- aspire otel
 ```
 
-Kestrel binds the dashboard on both `127.0.0.1:15154` and `[::1]:15154` inside
-the sandbox, so the default `tcp4` publication works. If the host resolves
-`zaiware-platform.dev.localhost` to IPv6 only, replace the host in the printed
-dashboard URL with `localhost` or `127.0.0.1` and keep the `/login?t=...` path.
-Do not bind the port to a non-loopback host address: the dashboard is not
-authenticated beyond its browser token.
+If you need the dashboard UI, add the `15154` mapping under `ports:` in
+`sbxenv.yaml` temporarily and open the printed `/login?t=...` URL; the
+dashboard has no authentication beyond that browser token, so keep it on
+loopback.
 
 A Kit change takes effect only when the sandbox is created again
 (`sbx env rm && sbx env run`); the OpenCode data volume keeps its sessions.
