@@ -15,10 +15,10 @@
 #     DCP_IP_VERSION_PREFERENCE=IPv4 makes it use 127.0.0.1, which the
 #     sandbox's own NO_PROXY already covers.
 #
-# The Kit declares only a bare `dotnet` requirement and its own `provides`. It
-# declares no network-policy: the dotnet Kit already grants NuGet restore, and
-# the Docker daemon pulls the dashboard/Postgres images. Keeping the Kit to the
-# image plus these env vars removes creation-time policy surface.
+# The Kit declares no `requires`, `provides`, or network-policy. The dotnet Kit
+# is listed before this one in sbxenv.yaml. Keeping the Kit dependency-free
+# avoids create-time kit-resolution failures; the dotnet Kit already grants
+# NuGet restore, and the Docker daemon pulls the dashboard/Postgres images.
 #
 # ASPIRE_ALLOW_UNSECURED_TRANSPORT is for the AppHost's `http` launch profile.
 # The image ships no trusted ASP.NET Core HTTPS development certificate, and the
@@ -34,16 +34,9 @@ licenses: [MIT]
 
 kind: mixin
 
-# Dependency and identity only; no runtime behavior. A bare name is deliberate:
-# the dotnet Kit's provided version comes from a build arg, and comparing a
-# version constraint against an authored ${{ kit.args.* }} reference can fail
-# during local-kit resolution before the build expands it.
-requires:
-  - dotnet
-
-provides:
-  - "aspire@${{ kit.args.aspireVersion }}"
-
+# No requires/provides: the dotnet Kit is listed before this kit in
+# sbxenv.yaml. sbx resolves kit capabilities at sandbox creation, so a
+# requirement failure is a create-time error, not a Docker build error.
 args:
   aspireVersion:
     default: "13.6.4"

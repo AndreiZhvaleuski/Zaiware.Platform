@@ -200,11 +200,13 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   from the install root, so a `/usr/local/bin` install would try to write
   `/usr/local/logs` and `/usr/local/cli`, which the agent cannot create. The
   `~/.local` install keeps that state writable, with no symlink.
-- Dependency: the kit requires the bare `dotnet` capability (provided by the
-  dotnet kit) and relies on its `DOTNET_ROOT`. The requirement is deliberately a
-  bare name, not `>= version`: the dotnet kit's provided version comes from a
-  build arg, and a version constraint can be judged during local-kit resolution
-  before the build expands the authored `${{ kit.args.* }}` reference.
+- Dependency: the kit declares no `requires`/`provides`; the dotnet kit must be
+  listed before it in `sbxenv.yaml` and provides `DOTNET_ROOT`. sbx resolves kit
+  capabilities at sandbox creation (`sbx env plan`/`run`), not during the
+  Docker image build, so a bad requirement surfaces as a create-time failure
+  rather than a build error. Keeping the kit dependency-free avoids that.
+  Run `sbx env plan` after changing kits; it resolves the set before creating
+  anything and is the right place to catch capability errors.
 - Proxy: the mixin does **not** override `NO_PROXY`.
   `DCP_IP_VERSION_PREFERENCE=IPv4` makes DCP use `127.0.0.1` instead of
   `[::1]`, which the sandbox proxy does not bypass. `127.0.0.1` and
