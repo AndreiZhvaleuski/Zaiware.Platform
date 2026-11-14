@@ -17,10 +17,16 @@ placeholder for the real value on outbound requests.
 | `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`) and persists OpenCode data across recreation (`volume@1`). |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 | `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
+| `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 
 Split rationale: `opencode.json` is *agent* configuration and belongs in the
 repo it configures. `provider-keys` declares *host-side grants* (which domain
 may receive which header) and cannot be expressed in OpenCode config.
+
+Before adding or changing a kit, read [`MIXINS.md`](MIXINS.md). It records the
+rules the Aspire and OpenSpec kits paid for: one install pattern, no unverified
+`requires`, no `NO_PROXY` override, bake into the image, and always verify
+after a full recreate.
 
 Before adding or changing a kit, read [`MIXINS.md`](MIXINS.md). It records the
 rules the Aspire and OpenSpec kits paid for: one install pattern, no unverified
@@ -85,6 +91,11 @@ Two details of the hook matter:
   Keep the list for portability and to document what the server needs. Without
   it, a spec-conformant runtime starts without `OPENCODE_SERVER_PASSWORD` (no
   auth) and without the provider credential sentinels.
+- `env:` is still listed. Install hooks are deny-by-default; sbx gives startup
+  hooks the full sandbox environment, but the v3 spec says deny-by-default.
+  Keep the list for portability and to document what the server needs. Without
+  it, a spec-conformant runtime starts without `OPENCODE_SERVER_PASSWORD` (no
+  auth) and without the provider credential sentinels.
 - `cd "$WORKSPACE_DIR"` sets the server's project root. Startup hooks start in
   the image `WORKDIR`, which is not the mounted workspace.
 
@@ -132,6 +143,12 @@ by `sbx env run` reattaches the same data as long as the sandbox name stays
   volume.
 - Keep `path`, `mode`, and `size` unchanged. A difference refuses allocation
   before the container is replaced.
+- The volume is keyed by **sandbox name + kit source + volume path**, not by
+  kit version. For a local source, moving `kits/opencode-server` or
+  `sbxenv.yaml` to another directory changes the identity and starts a fresh
+  volume.
+- Keep `path`, `mode`, and `size` unchanged. A difference refuses allocation
+  before the container is replaced.
 - The path assumes OpenCode's default data directory (`XDG_DATA_HOME` unset).
   If you set `XDG_DATA_HOME`, move the volume path to match.
 - `sbx env rm` keeps the volume by default; deleting it is explicit (`sbx volume ls` on
@@ -172,6 +189,20 @@ gets the same toolchain with no network round trip.
   the sandbox `PATH`. No shell profile or startup hook is needed.
 - Writable state: `~/.dotnetup` must stay writable by uid 1000. dotnetup
   creates an activity lock there on every command, not only for updates.
+- Version: the SDK is pinned by `sdkVersion` in `dotnet.yaml` (default
+  `10.0.401`), which must match `global.json`; bump both together. The dotnetup
+  manager comes from the `preview` quality channel, so it floats per build.
+  Record `dotnetup --version` when byte reproducibility matters.
+- Location: the dotnetup binary lives at `~/.dotnetup/dotnetup`; the SDK and
+  data live at `~/.local/share/dotnetup`. The install is built with
+  `HOME=/home/agent`, so the absolute paths in `dotnetup_manifest.json` stay
+  valid after the overlay lands on the workload. `dotnetup list`, `update`, and
+  `uninstall` work in the sandbox.
+- PATH: `/usr/local/bin/dotnet` links to the SDK muxer and
+  `/usr/local/bin/dotnetup` links to the manager; `/usr/local/bin` is already on
+  the sandbox `PATH`. No shell profile or startup hook is needed.
+- Writable state: `~/.dotnetup` must stay writable by uid 1000. dotnetup
+  creates an activity lock there on every command, not only for updates.
 - `DOTNET_ROOT`: the mixin exports `/home/agent/.local/share/dotnetup/dotnet`.
   `dotnet` resolves through the symlink without it, but an apphost executable
   started directly (Aspire/DCP starts the built AppHost binary, not `dotnet
@@ -180,11 +211,16 @@ gets the same toolchain with no network round trip.
 - XDG: both install roots assume `XDG_DATA_HOME` is unset. If it is set,
   dotnetup reads a different data directory; the baked SDK and `dotnet` still
   work, but `dotnetup list` will look empty.
+- XDG: both install roots assume `XDG_DATA_HOME` is unset. If it is set,
+  dotnetup reads a different data directory; the baked SDK and `dotnet` still
+  work, but `dotnetup list` will look empty.
 - ICU: the opencode workload is a hardened Debian image without `libicu`, and
   the .NET host aborts at startup without it (`Couldn't find a valid ICU
   package`). The Dockerfile copies only the ICU shared libraries from the build
   stage into the overlay; `libssl` and `zlib` come from the workload.
 - Egress: the mixin grants NuGet restore (`api.nuget.org`, `*.nuget.org`) and
+  the endpoints needed for an in-sandbox SDK install. Add another feed's host
+  there if the project uses one.
   the endpoints needed for an in-sandbox SDK install. Add another feed's host
   there if the project uses one.
 
@@ -197,7 +233,9 @@ Verify after the next sandbox creation:
 ```powershell
 sbx env exec -- dotnet --version
 sbx env exec -- dotnetup --version
+sbx env exec -- dotnetup --version
 sbx env exec -- dotnetup list
+sbx env exec -- bash -lc 'readlink /usr/local/bin/dotnet; readlink /usr/local/bin/dotnetup'
 sbx env exec -- bash -lc 'readlink /usr/local/bin/dotnet; readlink /usr/local/bin/dotnetup'
 sbx env exec -- bash -lc 'dotnet build Zaiware.Platform.slnx'
 ```
@@ -223,8 +261,18 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   writable by the agent. Without a recognized sidecar the fallback is
   `ASPIRE_HOME`, then `$HOME/.aspire`. There is no `ASPIRE_CLI_HOME` or XDG
   state variable.
+- Layout: the CLI installs at the official default, `~/.aspire/bin/aspire`,
+  and `/usr/local/bin/aspire` is a symlink. The installer writes
+  `.aspire-install.json` next to the binary; for a script install the CLI keeps
+  logs, cache, hives, and versions in the parent (`~/.aspire`), which is
+  writable by the agent. Without a recognized sidecar the fallback is
+  `ASPIRE_HOME`, then `$HOME/.aspire`. There is no `ASPIRE_CLI_HOME` or XDG
+  state variable.
 - Dependency: the kit provides `aspire@<version>` but declares no `requires`;
   the dotnet kit must be listed before it in `sbxenv.yaml` and provides
+  `DOTNET_ROOT`. `requires` is valid v3 and is resolved at sandbox creation, but
+  it is not adopted until the isolated probe in `MIXINS.md` passes. Kit list
+  order is composition order, not a dependency resolver.
   `DOTNET_ROOT`. `requires` is valid v3 and is resolved at sandbox creation, but
   it is not adopted until the isolated probe in `MIXINS.md` passes. Kit list
   order is composition order, not a dependency resolver.
@@ -237,6 +285,11 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   image ships no trusted ASP.NET Core HTTPS development certificate. Use the
   `http` launch profile; the sandbox publishes loopback ports only.
 - Telemetry: `ASPIRE_CLI_TELEMETRY_OPTOUT=true`.
+- Updates: the CLI is image-managed. Bump `aspireVersion` and recreate. An
+  in-sandbox `aspire update` changes only that sandbox and is lost on the next
+  recreate, so it is not part of the workflow.
+- Uninstall: delete `~/.aspire` and `/usr/local/bin/aspire`; the install script
+  has no uninstall command.
 - Updates: the CLI is image-managed. Bump `aspireVersion` and recreate. An
   in-sandbox `aspire update` changes only that sandbox and is lost on the next
   recreate, so it is not part of the workflow.
