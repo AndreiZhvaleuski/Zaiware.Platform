@@ -85,7 +85,3 @@ capabilities:
           - aspire.dev:443
           # The dashboard image, if the CLI starts it as a container.
           - mcr.microsoft.com:443
-
-  - type: com.docker.sandbox/agent-context@1
-    config:
-      contentFile: ./aspire-context.md
