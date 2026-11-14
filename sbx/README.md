@@ -195,18 +195,23 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
 - Version: `aspireVersion` (default `13.6.4`) must track the AppHost SDK in
   `Zaiware.Platform.AppHost.csproj` (`Aspire.AppHost.Sdk`) and the Aspire
   packages in `Directory.Packages.props`. Bump them together.
+- Layout: the CLI installs to `~/.aspire/bin` (the script's default) and
+  `/usr/local/bin/aspire` is a symlink. The CLI derives its log, state, and
+  bundle directories from the install root, so a direct `/usr/local/bin`
+  install would try to write `/usr/local/logs` and `/usr/local/cli`, which the
+  agent cannot create. The home install keeps that state writable.
 - Dependency: the mixin declares `requires: ["dotnet >= 10.0.100"]`, so the
   dotnet kit must be in the same sandbox. It also relies on the `DOTNET_ROOT`
   exported by `kits/dotnet`; DCP launches the built apphost binary directly,
   and that binary does not infer the muxer root from `/usr/local/bin/dotnet`.
-- Proxy: `NO_PROXY` and `no_proxy` carry the sandbox defaults plus `[::1]`,
-  `.localhost`, and `.dev.localhost`. The sandbox resolver maps `*.localhost`
-  to `::1`, and the proxy does not bypass the bracketed IPv6 literal, so
-  Aspire/DCP's dashboard, OTLP, and resource service calls fail without it.
-  This is the fix described in the sandbox's `AGENTS.md`; it is exported
-  container-wide because there is no per-process proxy-bypass setting. To add
-  host-specific bypasses, override `noProxy` and `noProxyLower` on the kit
-  entry; keep `[::1]`, `.localhost`, and `gateway.docker.internal`.
+- Proxy: `DCP_IP_VERSION_PREFERENCE=IPv4` makes DCP use `127.0.0.1` instead of
+  `[::1]`. The sandbox proxy does not bypass the bracketed IPv6 literal, so
+  DCP's connection check fails with a 502 by default. Preferring IPv4 keeps the
+  traffic on `127.0.0.1`, which `NO_PROXY` already covers. Do not add `[::1]`
+  to `NO_PROXY`: some clients parse it as a regex and can lose their proxy.
+  `NO_PROXY` and `no_proxy` also carry `.localhost` and `.dev.localhost`. To
+  add host-specific bypasses, override `noProxy` and `noProxyLower` on the kit
+  entry; keep `.localhost` and `gateway.docker.internal`.
 - Transport: `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is exported because the
   image ships no trusted ASP.NET Core HTTPS development certificate. Use the
   `http` launch profile; the sandbox publishes loopback ports only.

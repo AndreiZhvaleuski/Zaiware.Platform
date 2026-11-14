@@ -14,10 +14,11 @@
 #     Aspire/DCP launches directly searches DOTNET_ROOT and exits with
 #     "You must install .NET to run this application" without it.
 #   * NO_PROXY: the sandbox resolves *.localhost to ::1 (see AGENTS.md), and
-#     Aspire/DCP address local services as [::1]. The sandbox proxy does not
-#     bypass the bracketed literal by default, so those calls go to the proxy
-#     and fail. Adding [::1] is the documented Aspire fix; it is exported
-#     container-wide because there is no per-process proxy-bypass setting.
+#     Aspire/DCP would normally address local services as [::1]. The sandbox
+#     proxy does not bypass the bracketed literal, so those calls fail. Instead
+#     of adding [::1] to NO_PROXY (which some clients parse as a regex and
+#     break their proxy), this mixin sets DCP_IP_VERSION_PREFERENCE=IPv4:
+#     DCP's endpoints become 127.0.0.1, which the normal NO_PROXY entries cover.
 #
 # ASPIRE_ALLOW_UNSECURED_TRANSPORT is for the AppHost's `http` launch profile.
 # The image ships no trusted ASP.NET Core HTTPS development certificate, and the
@@ -53,18 +54,28 @@ args:
     description: Allow the AppHost's HTTP launch profile (no trusted dev certificate in the image)
     env: ASPIRE_ALLOW_UNSECURED_TRANSPORT
 
+  # DCP's default endpoint address in this sandbox is [::1]. The proxy does not
+  # bypass the bracketed IPv6 literal, so DCP connections fail with a 502.
+  # Preferring IPv4 makes DCP use 127.0.0.1, which the standard NO_PROXY
+  # entries already cover, without the regex hazard of a [::1] entry.
+  dcpIpVersionPreference:
+    default: "IPv4"
+    description: Prefer IPv4 for DCP endpoints so loopback traffic bypasses the proxy
+    env: DCP_IP_VERSION_PREFERENCE
+
   # Both spellings are exported because clients disagree about which one they
   # read. Keep the sandbox's own entries (localhost, 127.0.0.1, ::1,
-  # gateway.docker.internal); [::1] is the bracketed form Aspire/DCP use, and
-  # .localhost covers zaiware-platform.dev.localhost and other profiles.
+  # gateway.docker.internal); .localhost covers zaiware-platform.dev.localhost
+  # and other launch profiles. Do not add [::1]: it is a regex character class
+  # to some clients and can disable their proxy.
   noProxy:
-    default: "localhost,127.0.0.1,::1,[::1],gateway.docker.internal,.localhost,.dev.localhost"
-    description: Proxy bypasses for Aspire/DCP loopback endpoints (uppercase form)
+    default: "localhost,127.0.0.1,::1,gateway.docker.internal,.localhost,.dev.localhost"
+    description: Proxy bypasses for local endpoints (uppercase form)
     env: NO_PROXY
 
   noProxyLower:
-    default: "localhost,127.0.0.1,::1,[::1],gateway.docker.internal,.localhost,.dev.localhost"
-    description: Proxy bypasses for Aspire/DCP loopback endpoints (lowercase form)
+    default: "localhost,127.0.0.1,::1,gateway.docker.internal,.localhost,.dev.localhost"
+    description: Proxy bypasses for local endpoints (lowercase form)
     env: no_proxy
 
   cliTelemetryOptOut:

@@ -29,11 +29,13 @@ development certificate, and the sandbox only publishes loopback ports.
 - `DOTNET_ROOT` points at the dotnetup SDK. Without it, the apphost executable
   that DCP starts directly exits with "You must install .NET to run this
   application". Do not clear it.
-- `NO_PROXY` / `no_proxy` contain `[::1]`, `.localhost`, and `.dev.localhost`.
-  The sandbox resolves `*.localhost` to `::1`, and the proxy does not bypass
-  the bracketed IPv6 literal by default. Keep those entries when changing the
-  list, or DCP's local resource service and dashboard calls will be sent to
-  the proxy.
+- `DCP_IP_VERSION_PREFERENCE=IPv4` makes DCP use `127.0.0.1` instead of
+  `[::1]`. The proxy does not bypass the bracketed IPv6 literal, so this keeps
+  DCP's loopback calls on an address `NO_PROXY` already covers. Do not add
+  `[::1]` to `NO_PROXY`: some clients parse it as a regex and can lose their
+  proxy.
+- `NO_PROXY` / `no_proxy` also contain `.localhost` and `.dev.localhost` for
+  the launch-profile hostnames. Keep those entries when changing the list.
 - The AppHost uses the Docker daemon exposed in the sandbox, so container
   resources show up in `docker ps`. Project resources run as local processes
   and publish their endpoints on sandbox loopback.
