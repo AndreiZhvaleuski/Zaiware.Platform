@@ -275,8 +275,9 @@ release is a native binary, so no Node.js runtime is involved; the installer
 also verifies the archive against the release's `SHA256SUMS`. The version is
 pinned by `openspecVersion`.
 
-- Location: `~/.local/bin/openspec`, which is already on the OpenCode
-  workload's `PATH`. No symlink, shell profile, or startup hook is needed.
+- Location: `/usr/local/bin/openspec`, which is already on the OpenCode
+  workload's `PATH`. No symlink, shell profile, or startup hook is needed, and
+  the Kit does not touch `~/.local/bin` (the aspire Kit owns that directory).
 - Why baked: the sandbox is recreated routinely, and an install performed at
   runtime (or by hand in `~/.local/bin`) lives in the sandbox's writable layer,
   so it disappears on `sbx env rm`. A mixin layer is part of the image digest.
@@ -291,15 +292,14 @@ pinned by `openspecVersion`.
   skills, and the OpenCode command shims) are written into the workspace by
   `openspec init`, not into the sandbox. `~/.config/openspec` holds only
   disposable per-machine settings.
-- Telemetry: the mixin exports `OPENSPEC_TELEMETRY=0` (override the
-  `telemetry` arg to change it). The sandbox grants no telemetry host anyway,
-  so this mostly keeps the first-run notice out of command output.
 - If the client cannot connect after adding this Kit, confirm the sandbox was
-  recreated, not just reattached: `sbx env rm` then `sbx env run --detach`.
-  `sbx env run` against an existing sandbox can apply a Kit change without
-  re-running the `opencode-server` boot hook, which leaves `opencode serve`
-  down. A recreated sandbox writes a new `cli starting ... "serve"` line to
-  `~/.local/share/opencode/log/opencode.log`.
+  recreated and give the background startup hook time to finish. `sbx env run
+  --detach` returns before `opencode serve` is listening; poll
+  `http://127.0.0.1:4096/global/health` for `200` before starting the client.
+  `sbx env exec` against a stopped sandbox starts it and runs the command
+  immediately, so a `ps` right after can run before the hook has launched the
+  server. A boot that runs the hook writes a new `cli starting ... "serve"`
+  line to `~/.local/share/opencode/log/opencode.log`.
 
 The Kit only supplies the CLI binary. Create the project side at the repo
 root with:

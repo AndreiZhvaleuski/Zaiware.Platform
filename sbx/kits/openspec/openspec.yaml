@@ -7,8 +7,10 @@
 # version is pinned by `openspecVersion`; bump it and recreate to upgrade.
 #
 # The installer verifies the release archive against the release's SHA256SUMS
-# and drops the native binary in ~/.local/bin, which the OpenCode workload
+# and drops the native binary in /usr/local/bin, which the OpenCode workload
 # already has on PATH. The binary needs only glibc, which the workload ships.
+# It is installed there rather than ~/.local/bin so this Kit never overlays a
+# directory the aspire Kit also owns.
 #
 # Project state does not live here: `openspec init` writes openspec/,
 # .agents/skills/openspec-*, and .opencode/commands/openspec-* into the
@@ -39,8 +41,3 @@ args:
     pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
     description: Exact OpenSpec CLI version to install
     buildArg: OPENSPEC_VERSION
-
-  telemetry:
-    default: "0"
-    description: Anonymous usage telemetry (0 disables it; the sandbox grants no telemetry host)
-    env: OPENSPEC_TELEMETRY
