@@ -195,15 +195,16 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
 - Version: `aspireVersion` (default `13.6.4`) must track the AppHost SDK in
   `Zaiware.Platform.AppHost.csproj` (`Aspire.AppHost.Sdk`) and the Aspire
   packages in `Directory.Packages.props`. Bump them together.
-- Layout: the CLI installs to `~/.aspire/bin` (the script's default) and
-  `/usr/local/bin/aspire` is a symlink. The CLI derives its log, state, and
-  bundle directories from the install root, so a direct `/usr/local/bin`
-  install would try to write `/usr/local/logs` and `/usr/local/cli`, which the
-  agent cannot create. The home install keeps that state writable.
-- Dependency: the mixin declares `requires: ["dotnet >= 10.0.100"]`, so the
-  dotnet kit must be in the same sandbox. It also relies on the `DOTNET_ROOT`
-  exported by `kits/dotnet`; DCP launches the built apphost binary directly,
-  and that binary does not infer the muxer root from `/usr/local/bin/dotnet`.
+- Layout: the CLI installs to `~/.local/bin`, which is already on the OpenCode
+  workload's `PATH`. The CLI derives its log, state, and bundle directories
+  from the install root, so a `/usr/local/bin` install would try to write
+  `/usr/local/logs` and `/usr/local/cli`, which the agent cannot create. The
+  `~/.local` install keeps that state writable, with no symlink.
+- Dependency: the kit assumes the dotnet kit is present (it is listed before
+  this one) but declares no versioned `requires`, so sandbox creation has no
+  kit-resolution surface. It relies on the `DOTNET_ROOT` exported by
+  `kits/dotnet`; DCP launches the built apphost binary directly, and that
+  binary does not infer the muxer root from `/usr/local/bin/dotnet`.
 - Proxy: the mixin does **not** override `NO_PROXY`.
   `DCP_IP_VERSION_PREFERENCE=IPv4` makes DCP use `127.0.0.1` instead of
   `[::1]`, which the sandbox proxy does not bypass. `127.0.0.1` and
@@ -213,13 +214,14 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   image ships no trusted ASP.NET Core HTTPS development certificate. Use the
   `http` launch profile; the sandbox publishes loopback ports only.
 - Telemetry: `ASPIRE_CLI_TELEMETRY_OPTOUT=true`.
-- Updates: `aspire update --self` works in the running sandbox because the
-  install lives in `~/.aspire/bin`, but the change is lost on `sbx env rm`.
-  Bump `aspireVersion` for the image.
+- Updates: the CLI is image-managed. Bump `aspireVersion` and recreate; the
+  kit does not grant the GitHub/`ci.dot.net` access `aspire update --self`
+  would need.
 
 The build downloads the CLI from `aspire.dev` and the matching GitHub release
-on the host, so it needs host network access; the sandbox itself only needs the
-runtime grants in `aspire.yaml`.
+on the host, so it needs host network access. The sandbox itself needs no extra
+grants from this kit: the dotnet kit grants NuGet restore, and the Docker
+daemon pulls the dashboard and database images.
 
 Verify after the next sandbox creation:
 

@@ -8,16 +8,17 @@
 #
 # The environment arguments fix two things an AppHost needs in this sandbox:
 #
-#   * DOTNET_ROOT: the dotnet Kit installs a dotnetup-managed SDK in
-#     /home/agent/.local/share/dotnetup, not /usr/share/dotnet. `dotnet` works
-#     through its /usr/local/bin symlink, but the apphost executable that
+#   * DOTNET_ROOT comes from the dotnet Kit. The apphost executable that
 #     Aspire/DCP launches directly searches DOTNET_ROOT and exits with
 #     "You must install .NET to run this application" without it.
-#   * DCP endpoints: DCP normally binds [::1], which the sandbox proxy does not
-#     bypass. DCP_IP_VERSION_PREFERENCE=IPv4 makes it use 127.0.0.1, which the
-#     sandbox's own NO_PROXY already covers. The mixin does not override
-#     NO_PROXY: clients that parse it as a regex can lose their proxy, and the
-#     sandbox may add its own bypass entries.
+#   * DCP normally binds [::1], which the sandbox proxy does not bypass.
+#     DCP_IP_VERSION_PREFERENCE=IPv4 makes it use 127.0.0.1, which the
+#     sandbox's own NO_PROXY already covers.
+#
+# The Kit deliberately declares no `requires`, `provides`, or network-policy.
+# The dotnet Kit already grants NuGet restore, and the Docker daemon pulls the
+# dashboard/Postgres images. Keeping the Kit to the image plus these env vars
+# removes sandbox-creation resolution and policy surface.
 #
 # ASPIRE_ALLOW_UNSECURED_TRANSPORT is for the AppHost's `http` launch profile.
 # The image ships no trusted ASP.NET Core HTTPS development certificate, and the
@@ -26,20 +27,12 @@ schemaVersion: "3"
 displayName: Aspire CLI
 description: >-
   The Aspire CLI, installed with Aspire's official install script, plus the
-  .NET root, proxy bypasses, and HTTP transport opt-in an AppHost needs inside
-  the sandbox.
+  .NET root, IPv4 DCP preference, and HTTP transport opt-in an AppHost needs
+  inside the sandbox.
 sourceUrl: https://aspire.dev/get-started/install-cli/
 licenses: [MIT]
 
 kind: mixin
-
-# The AppHost needs a .NET 10 SDK. This also guarantees the dotnet Kit is in the
-# set, so `dotnet` is on PATH when the Aspire CLI builds the AppHost.
-requires:
-  - "dotnet >= 10.0.100"
-
-provides:
-  - "aspire@${{ kit.args.aspireVersion }}"
 
 args:
   aspireVersion:
@@ -66,22 +59,3 @@ args:
     default: "true"
     description: Disable Aspire CLI usage telemetry
     env: ASPIRE_CLI_TELEMETRY_OPTOUT
-
-capabilities:
-  # NuGet is also granted by the dotnet Kit. It stays here because the Aspire
-  # mixin restores and builds the AppHost itself, and a Kit should carry the
-  # access its own commands need.
-  - type: com.docker.sandbox/network-policy@1
-    config:
-      runtime:
-        allow:
-          - api.nuget.org:443
-          - "*.nuget.org:443"
-          # `aspire update`, the update check, and `aspire docs` use these.
-          - github.com:443
-          - objects.githubusercontent.com:443
-          - ci.dot.net:443
-          - aka.ms:443
-          - aspire.dev:443
-          # The dashboard image, if the CLI starts it as a container.
-          - mcr.microsoft.com:443
