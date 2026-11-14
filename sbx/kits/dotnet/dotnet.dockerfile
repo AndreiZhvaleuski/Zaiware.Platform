@@ -10,18 +10,18 @@ ARG DOTNET_SDK_VERSION=10.0.401
 # to track "daily" while testing one.
 ARG DOTNETUP_QUALITY=preview
 
-ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+ENV HOME=/home/agent \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     DOTNET_NOLOGO=1
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl libicu76 \
  && rm -rf /var/lib/apt/lists/*
 
-# The script verifies the binary's SHA-512 before installing. Install to the
-# absolute path the sandbox will see, so `dotnetup self update` keeps working.
+# The script verifies the binary's SHA-512 before installing. Use the official
+# default, $HOME/.dotnetup; the activity lock it creates there needs uid 1000.
 RUN curl -fsSL https://aka.ms/dotnetup/get-dotnetup.sh -o /tmp/get-dotnetup.sh \
  && bash /tmp/get-dotnetup.sh \
-      --install-dir /usr/local/lib/dotnetup \
       --quality "$DOTNETUP_QUALITY"
 
 # The workload is a hardened Debian image without libicu, and the .NET host
@@ -46,7 +46,7 @@ RUN for lib in /usr/lib/*-linux-gnu/libicu*.so.*; do \
 RUN mkdir -p /home/agent \
  && set -eux; \
     for attempt in 1 2 3; do \
-      if HOME=/home/agent /usr/local/lib/dotnetup/dotnetup install "$DOTNET_SDK_VERSION" --no-progress; then \
+      if /home/agent/.dotnetup/dotnetup install "$DOTNET_SDK_VERSION" --no-progress; then \
         break; \
       fi; \
       if [ "$attempt" = 3 ]; then exit 1; fi; \
@@ -55,13 +55,16 @@ RUN mkdir -p /home/agent \
     done; \
     test -x /home/agent/.local/share/dotnetup/dotnet/dotnet
 
-# Stage only the content the workload lacks: the dotnetup binary, the managed
-# SDK, and two /usr/local/bin links. /usr/local/bin is on the sandbox PATH, so
-# no shell profile or startup hook has to wire the environment.
-RUN mkdir -p /out/usr/local/bin /out/usr/local/lib /out/home/agent/.local/share \
- && cp -a /usr/local/lib/dotnetup /out/usr/local/lib/ \
+# Stage the official install roots and expose them through /usr/local/bin.
+# /usr/local/bin is on the sandbox PATH, so no shell profile is needed. The
+# activity lock is build noise; remove it.
+RUN mkdir -p /out/usr/local/bin /out/home/agent/.local/share \
+ && cp -a /home/agent/.dotnetup /out/home/agent/ \
  && cp -a /home/agent/.local/share/dotnetup /out/home/agent/.local/share/ \
- && ln -s /usr/local/lib/dotnetup/dotnetup /out/usr/local/bin/dotnetup \
+ && rm -f /out/home/agent/.dotnetup/dotnetup.activity.lock \
+ && test -x /out/home/agent/.dotnetup/dotnetup \
+ && test -x /out/home/agent/.local/share/dotnetup/dotnet/dotnet \
+ && ln -s /home/agent/.dotnetup/dotnetup /out/usr/local/bin/dotnetup \
  && ln -s /home/agent/.local/share/dotnetup/dotnet/dotnet /out/usr/local/bin/dotnet \
  && chown -R 1000:1000 /out/home/agent
 

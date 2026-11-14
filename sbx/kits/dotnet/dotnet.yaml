@@ -6,9 +6,10 @@
 # A mixin layer makes the toolchain part of the image digest, so the agent gets
 # the same SDK on every boot with no network round trip.
 #
-# The version is pinned by `sdkVersion`, which must track global.json. Keeping
-# it in the Kit (rather than deriving it at runtime) is what makes the image
-# reproducible; bump both together.
+# The SDK version is pinned by `sdkVersion`, which must track global.json; bump
+# both together. The dotnetup manager comes from the `preview` quality channel,
+# so it floats per build. Record `dotnetup --version` when reproducibility
+# matters.
 schemaVersion: "3"
 displayName: .NET SDK (dotnetup)
 description: >-
@@ -30,6 +31,9 @@ args:
   # (Aspire/DCP launches the built AppHost binary directly) does not infer the
   # SDK root from the muxer. Without DOTNET_ROOT it looks in /usr/share/dotnet
   # and exits with "You must install .NET to run this application".
+  #
+  # The dotnetup binary lives at ~/.dotnetup/dotnetup and must stay writable by
+  # uid 1000: it creates an activity lock there on every command.
   dotnetRoot:
     default: /home/agent/.local/share/dotnetup/dotnet
     description: SDK root for apphost executables launched directly by tools such as Aspire
@@ -47,8 +51,8 @@ capabilities:
           # *.nuget.org; the single-label wildcard covers both.
           - api.nuget.org:443
           - "*.nuget.org:443"
-          # Only needed if the agent installs another SDK or updates dotnetup
-          # from inside the sandbox. The baked install itself uses no egress.
+          # Only needed if the agent installs another SDK from inside the
+          # sandbox. The baked install itself uses no egress.
           - aka.ms:443
           - dotnet.microsoft.com:443
           - builds.dotnet.microsoft.com:443
