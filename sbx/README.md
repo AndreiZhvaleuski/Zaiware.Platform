@@ -301,8 +301,8 @@ pinned by `openspecVersion`.
   server. A boot that runs the hook writes a new `cli starting ... "serve"`
   line to `~/.local/share/opencode/log/opencode.log`.
 
-The Kit only supplies the CLI binary. Create the project side at the repo
-root with:
+The Kit only supplies the CLI binary. The project side is initialized at the
+repo root with:
 
 ```powershell
 openspec init --tools opencode
@@ -315,12 +315,11 @@ openspec/config.yaml                       project schema and context
 openspec/specs/                            current specs
 openspec/changes/                          in-motion changes (archive/ inside)
 .agents/skills/openspec-*/                 the six workflow skills
-.opencode/commands/openspec-*.md           command shims that load those skills
 ```
 
-Those files are deliberately left untracked for now. OpenCode discovers the
-workflow skills from the workspace, so a fresh checkout must run
-`openspec init --tools opencode` before they are available.
+These are committed with the repository, so a fresh checkout has the workflow
+skills. Re-run `openspec init --tools opencode` after upgrading OpenSpec to
+refresh them.
 
 Verify after the next sandbox creation:
 
