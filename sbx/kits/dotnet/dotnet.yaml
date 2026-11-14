@@ -26,6 +26,15 @@ args:
     description: Exact .NET SDK version to install; keep in sync with global.json
     buildArg: DOTNET_SDK_VERSION
 
+  # `dotnet` works through the /usr/local/bin symlink, but an apphost executable
+  # (Aspire/DCP launches the built AppHost binary directly) does not infer the
+  # SDK root from the muxer. Without DOTNET_ROOT it looks in /usr/share/dotnet
+  # and exits with "You must install .NET to run this application".
+  dotnetRoot:
+    default: /home/agent/.local/share/dotnetup/dotnet
+    description: SDK root for apphost executables launched directly by tools such as Aspire
+    env: DOTNET_ROOT
+
 provides:
   - "dotnet@${{ kit.args.sdkVersion }}"
 

@@ -12,6 +12,7 @@ placeholder for the real value on outbound requests.
 | `../sbxenv.yaml` | Environment file: agent, workspace, kits, args, ports, bindings. Must stay at the workspace root. |
 | `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for DeepSeek and OpenCode Go. |
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
+| `kits/aspire/aspire.yaml` | Mixin: Aspire CLI (official install script) plus the runtime environment an AppHost needs. |
 | `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`) and persists OpenCode data across recreation (`volume@1`). |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 
@@ -155,6 +156,11 @@ gets the same toolchain with no network round trip.
 - PATH: `/usr/local/bin/dotnet` and `/usr/local/bin/dotnetup` are symlinks, and
   `/usr/local/bin` is already on the sandbox `PATH`. No shell profile or
   startup hook is needed.
+- `DOTNET_ROOT`: the mixin exports `/home/agent/.local/share/dotnetup/dotnet`.
+  `dotnet` resolves through the symlink without it, but an apphost executable
+  started directly (Aspire/DCP starts the built AppHost binary, not `dotnet
+  run`) looks in `/usr/share/dotnet` and exits with "You must install .NET to
+  run this application" when the variable is missing.
 - ICU: the opencode workload is a hardened Debian image without `libicu`, and
   the .NET host aborts at startup without it (`Couldn't find a valid ICU
   package`). The Dockerfile copies only the ICU shared libraries from the build
@@ -179,6 +185,80 @@ A Kit change takes effect only when the sandbox is created again. OpenCode's
 data directory is a persistent volume (see [Session data](#session-data)), so
 later recreations keep it. The first create after this change starts with an
 empty volume; export history from the old sandbox first if it matters.
+
+## Aspire
+
+`kits/aspire` installs the Aspire CLI with Aspire's official install script
+(`aspire.dev/install.sh`) and bakes it into the image. The script verifies the
+release archive's SHA-512; the version is pinned by `aspireVersion`.
+
+- Version: `aspireVersion` (default `13.6.4`) must track the AppHost SDK in
+  `Zaiware.Platform.AppHost.csproj` (`Aspire.AppHost.Sdk`) and the Aspire
+  packages in `Directory.Packages.props`. Bump them together.
+- Dependency: the mixin declares `requires: ["dotnet >= 10.0.100"]`, so the
+  dotnet kit must be in the same sandbox. It also relies on the `DOTNET_ROOT`
+  exported by `kits/dotnet`; DCP launches the built apphost binary directly,
+  and that binary does not infer the muxer root from `/usr/local/bin/dotnet`.
+- Proxy: `NO_PROXY` and `no_proxy` carry the sandbox defaults plus `[::1]`,
+  `.localhost`, and `.dev.localhost`. The sandbox resolver maps `*.localhost`
+  to `::1`, and the proxy does not bypass the bracketed IPv6 literal, so
+  Aspire/DCP's dashboard, OTLP, and resource service calls fail without it.
+  This is the fix described in the sandbox's `AGENTS.md`; it is exported
+  container-wide because there is no per-process proxy-bypass setting. To add
+  host-specific bypasses, override `noProxy` and `noProxyLower` on the kit
+  entry; keep `[::1]`, `.localhost`, and `gateway.docker.internal`.
+- Transport: `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is exported because the
+  image ships no trusted ASP.NET Core HTTPS development certificate. Use the
+  `http` launch profile; the sandbox publishes loopback ports only.
+- Telemetry: `ASPIRE_CLI_TELEMETRY_OPTOUT=true`.
+- Updates: the CLI is image-managed. `aspire update --self` cannot replace the
+  read-only install under `/usr/local/bin`; bump `aspireVersion` and recreate
+  the sandbox.
+
+The build downloads the CLI from `aspire.dev` and the matching GitHub release
+on the host, so it needs host network access; the sandbox itself only needs the
+runtime grants in `aspire.yaml`.
+
+Verify after the next sandbox creation:
+
+```powershell
+sbx env exec -- aspire --version
+sbx env exec -- bash -lc 'cd "$WORKSPACE_DIR" && aspire doctor'
+```
+
+Run the AppHost from the workspace root:
+
+```powershell
+# Background (use `aspire run` for foreground interactively).
+sbx env exec -- bash -lc 'cd "$WORKSPACE_DIR" && aspire start --non-interactive --launch-profile http'
+
+sbx env exec -- aspire ps
+sbx env exec -- aspire describe
+sbx env exec -- aspire logs identity-server
+sbx env exec -- aspire stop
+```
+
+DCP uses the Docker daemon exposed in the sandbox, so `postgres` and `pgAdmin`
+appear in `docker ps`; project resources run as local processes. Everything
+stays inside the sandbox.
+
+The `http` launch profile puts the dashboard at
+`http://zaiware-platform.dev.localhost:15154`. `sbxenv.yaml` publishes 15154 on
+host loopback; for an existing sandbox, add it manually:
+
+```powershell
+sbx ports zaiware-platform --publish 15154:15154
+```
+
+Kestrel binds the dashboard on both `127.0.0.1:15154` and `[::1]:15154` inside
+the sandbox, so the default `tcp4` publication works. If the host resolves
+`zaiware-platform.dev.localhost` to IPv6 only, replace the host in the printed
+dashboard URL with `localhost` or `127.0.0.1` and keep the `/login?t=...` path.
+Do not bind the port to a non-loopback host address: the dashboard is not
+authenticated beyond its browser token.
+
+A Kit change takes effect only when the sandbox is created again
+(`sbx env rm && sbx env run`); the OpenCode data volume keeps its sessions.
 
 ## Verify
 

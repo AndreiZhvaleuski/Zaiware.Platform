@@ -49,11 +49,20 @@ kits:
   # and persists OpenCode state in a volume across sandbox recreation.
   - ./sbx/kits/opencode-server
   - ./sbx/kits/dotnet
+  # Aspire CLI and the environment an AppHost needs (DOTNET_ROOT, NO_PROXY,
+  # HTTP transport). Requires the dotnet kit above.
+  - ./sbx/kits/aspire
   
-# Publish the API server on host loopback only, explicitly.
+# Publish local services on host loopback only, explicitly.
 ports:
   - sandbox: 4096
     host: 4096
+    hostIP: 127.0.0.1
+    protocol: tcp4
+  # Aspire dashboard (`http` launch profile). Loopback only; the printed
+  # dashboard URL carries its own browser token.
+  - sandbox: 15154
+    host: 15154
     hostIP: 127.0.0.1
     protocol: tcp4
 
