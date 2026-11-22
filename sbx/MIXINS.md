@@ -254,9 +254,9 @@ Then:
 ```powershell
 sbx env plan
 sbx env rm
-sbx env run --detach --env-args-file "$env:USERPROFILE\.sbx\zaiware.args"
+sbx env create
 
-$pw = (Get-Content "$env:USERPROFILE\.sbx\zaiware.args") -replace '^serverPassword=', ''
+$pw = $env:OPENCODE_PASSWORD   # the value stored in ..\zaiware-secrets\server-password
 1..30 | ForEach-Object {
   $code = curl.exe -s -o NUL -w "%{http_code}" -u "opencode:$pw" http://127.0.0.1:4096/openapi.json
   Write-Host "attempt $_ -> $code"
@@ -281,7 +281,7 @@ Run the tool's smoke test inside the sandbox after health is `200`.
 | Client gets 404/503 | Server start vs first request in `opencode.log` | Startup race; poll health before attaching |
 | Tool crashes on startup | Where does it write state? | Move the install root under the agent home |
 | Image is huge | `docker history` | A symlink was copied as a source; install to the final path |
-| `cmd` is 401 | Is the password in the sandbox env? | Set `OPENCODE_SERVER_PASSWORD`; do not pass a different value on `exec` |
+| `cmd` is 401 | Does `..\zaiware-secrets\server-password` exist and is it non-empty? | The boot hook fails closed without it; fix the file and recreate |
 | Volume did not reattach | Name, kit source, path | Keep all three stable; use sbx v0.50+ |
 
 Do not diagnose from `sbx env exec` alone: it can start a stopped sandbox and

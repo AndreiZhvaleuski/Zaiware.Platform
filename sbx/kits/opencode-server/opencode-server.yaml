@@ -8,20 +8,28 @@ displayName: OpenCode server lifecycle
 # after the last client disconnects.
 #
 # Why not a `cmd:` launch override: that runs inside the attached session and
-# is torn down when the session ends. Why not a plain background process either:
-# only a boot hook is restarted by the runtime, not by the client.
+# is torn down when the session ends. Why not a plain background process
+# either: only a boot hook is restarted by the runtime, not by the client.
+#
+# The server password is NOT passed through the sandbox environment: sbxenv
+# declares no arg and no env entry for it, so it never appears in command
+# history or the environment plan. The hook reads it at boot from the
+# read-only ../zaiware-secrets/server-password additional workspace (a
+# sibling of the repo on the host). The file is readable by the agent, same
+# as the old env var was: the password protects the published host port from
+# other host processes, not secrets from the agent. `test -s` makes a missing
+# or empty file fail the hook, so the port is never served unauthenticated,
+# and `tr -d '\r\n'` strips the line ending Windows editors leave behind.
 #
 # Install hooks are deny-by-default. In sbx, startup hooks receive the full
 # sandbox environment; the v3 spec says deny-by-default. Keep this list for
-# portability and to document what the server needs. Without it, a
-# spec-conformant runtime starts without OPENCODE_SERVER_PASSWORD (no basic
-# auth) and without the provider credential sentinels. The cd sets the server's
+# portability and to document what the server needs. The cd sets the server's
 # project root to the mounted workspace instead of the image WORKDIR.
 #
 # OpenCode stores sessions, messages, auth, logs, and snapshots under
 # ~/.local/share/opencode, its default when XDG_DATA_HOME is unset. volume@1
 # gives that directory a block volume keyed by sandbox name, so `sbx env rm`
-# followed by `sbx env run` reattaches the same data. The install hook owns a
+# followed by a create reattaches the same data. The install hook owns a
 # freshly created mount root before any agent hook writes to it.
 
 capabilities:
@@ -37,10 +45,9 @@ capabilities:
           user: "0"
           description: Make the OpenCode data volume writable by agent
       startup:
-        - command: cd "$WORKSPACE_DIR" && exec opencode serve --hostname 0.0.0.0 --port 4096
+        - command: cd "$WORKSPACE_DIR" && test -s ../zaiware-secrets/server-password && export OPENCODE_SERVER_PASSWORD="$(tr -d '\r\n' < ../zaiware-secrets/server-password)" && exec opencode serve --hostname 0.0.0.0 --port 4096
           env:
             - WORKSPACE_DIR
-            - OPENCODE_SERVER_PASSWORD
             - OPENCODE_API_KEY
             - HTTP_PROXY
             - HTTPS_PROXY

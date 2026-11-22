@@ -4,9 +4,11 @@
 #   sbx env run      create, or attach to, the sandbox
 #   sbx env rm       destroy the sandbox and its scoped secrets
 #
+# No arguments are needed for any of these commands.
+#
 # `sbx env` is experimental; pin your sbx version.
 # Keep this file at the workspace root: sbx mounts it read-only so the agent
-# cannot change what a later `sbx env run` executes on the host.
+# cannot change what a later create executes on the host.
 
 schemaVersion: "1"
 name: zaiware-platform
@@ -22,7 +24,7 @@ sandboxOptions:
 # auto-stopping, it does not keep a session process alive.
 # The API server is started by the opencode-server kit's lifecycle startup hook
 # at boot instead, and the sandbox is started without attaching:
-#   sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
+#   sbx env create
 
 # Mounts the directory containing this file. Clone mode: the sandbox works in a
 # private git clone of the workspace instead of a bind mount, so host and sandbox
@@ -32,22 +34,22 @@ workspace:
   path: .
   clone: true
 
-# The server password is required at every invocation so it never lands in git:
-#   sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
-# To also keep it out of PowerShell history, store it OUTSIDE the repo and pass
-# --env-args-file instead:
-#   %USERPROFILE%\.sbx\zaiware.args
+# The server password never passes through sbx — no `args:`, no `env:` — so it
+# never appears in command history, process listings, or the plan that
+# `sbx env plan`/`create`/`run` prints. It lives in a host directory OUTSIDE
+# this repo (sibling: ..\zaiware-secrets), mounted read-only below, and the
+# opencode-server boot hook reads it at every boot. Rotate it by editing the
+# file; the change takes effect on the next sandbox boot.
 #
-# It does not hide the value from the agent: the server runs inside the sandbox,
-# so OPENCODE_SERVER_PASSWORD is in its environment. The password protects the
-# published host port from other host processes, not secrets from the agent.
-args:
-  serverPassword:
-    required: true
-    description: Password for the in-sandbox OpenCode API server (basic auth)
-
-env:
-  OPENCODE_SERVER_PASSWORD: ${{ env.args.serverPassword }}
+# This does not hide the value from the agent — the mount is readable inside
+# the sandbox and the server runs there. The password protects the published
+# host port from other host processes, not secrets from the agent.
+additionalWorkspaces:
+  # Omitting `target:` mounts the directory at its host path inside the
+  # sandbox, so it is always reachable at "$WORKSPACE_DIR/../zaiware-secrets"
+  # regardless of where the workspace itself lives.
+  - path: ../zaiware-secrets
+    readOnly: true
 
 kits:
   # Network access + credential injection. Adds no files to the image.
@@ -62,7 +64,7 @@ kits:
   # OpenSpec CLI (standalone binary, no Node). Project artifacts under
   # openspec/ and .agents/skills come from `openspec init` in the repo.
   - ./sbx/kits/openspec
-  
+
 # Publish the API server on host loopback only, explicitly.
 ports:
   - sandbox: 4096

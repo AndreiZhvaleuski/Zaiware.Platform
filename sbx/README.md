@@ -33,39 +33,35 @@ after a full recreate.
 # Store the API key on the host, once. Prompts for the value.
 sbx secret set opencode-go
 
-# One-time: pick a server password and expose it to your shell as
-# $env:OPENCODE_PASSWORD. Give the same value to the client you run on
-# this machine.
-#
-# To keep it out of PowerShell history as well, store it OUTSIDE the repo and
-# pass --env-args-file instead:
-$dir = Join-Path $env:USERPROFILE '.sbx'
+# One-time: create the server-password file OUTSIDE the repo, as a sibling of
+# the project. Give the same value to the client you run on this machine
+# (e.g. as $env:OPENCODE_PASSWORD).
+$dir = "C:\Users\WRNGx3\Projects\zaiware-secrets"
 New-Item -ItemType Directory -Force $dir | Out-Null
-$pw = Read-Host 'OpenCode server password' -MaskInput
-Set-Content -Path (Join-Path $dir 'zaiware.args') -Value "serverPassword=$pw"
-Remove-Variable pw
+Read-Host 'OpenCode server password' -MaskInput |
+  Set-Content -NoNewline "$dir\server-password"
 
 # Review, then start the sandbox without attaching: the boot hook starts the
 # API server.
 sbx env plan
-sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
+sbx env create
 ```
 
-If your pinned sbx CLI predates `sbx env create`, use
-`sbx env run --detach --env-arg ...` instead — it also boots the sandbox
-without attaching.
+No arguments are needed on any `sbx env` command: the password never passes
+through the CLI, so it never appears in PowerShell history or the environment
+plan. `sbxenv.yaml` mounts `..\zaiware-secrets` read-only, and the
+opencode-server boot hook reads `server-password` from it at every boot.
 
-The args file lives outside the repo on purpose: anything inside the workspace
-is readable by the agent. It is not a secret from the agent regardless —
-`OPENCODE_SERVER_PASSWORD` is in the sandbox environment because the server
-runs there. The password protects the published host port from other host
-processes, not the agent from itself.
+The directory lives outside the repo on purpose: it must not be committed, and
+in clone mode untracked files never reach the sandbox anyway — only this mount
+does. It is not a secret from the agent regardless: the mount is readable inside
+the sandbox because the server runs there. The password protects the published
+host port from other host processes, not the agent from itself.
 
-The password is required so the published port is not an open agent API.
-`sbxenv.yaml` maps it to `OPENCODE_SERVER_PASSWORD`, which is the variable
-`opencode serve` reads to enable HTTP basic auth. Without it the server starts
-without authentication. The client authenticates as `opencode` with this
-password.
+The password is required so the published port is not an open agent API. The
+boot hook fails if the file is missing or empty, so the server refuses to start
+rather than serving an unauthenticated port. The client authenticates as
+`opencode` with this password.
 
 ## OpenCode API server
 
@@ -74,9 +70,10 @@ sandbox boot, in the background, so it is not tied to any `sbx` session:
 
 ```yaml
 startup:
-  - command: cd "$WORKSPACE_DIR" && exec opencode serve --hostname 0.0.0.0 --port 4096
-    env: [WORKSPACE_DIR, OPENCODE_SERVER_PASSWORD, OPENCODE_API_KEY,
-          HTTP_PROXY, HTTPS_PROXY, NO_PROXY]
+  - command: cd "$WORKSPACE_DIR" && test -s ../zaiware-secrets/server-password \
+      && export OPENCODE_SERVER_PASSWORD="$(tr -d '\r\n' < ../zaiware-secrets/server-password)" \
+      && exec opencode serve --hostname 0.0.0.0 --port 4096
+    env: [WORKSPACE_DIR, OPENCODE_API_KEY, HTTP_PROXY, HTTPS_PROXY, NO_PROXY]
     background: true
 ```
 
@@ -85,21 +82,24 @@ exec-style session, and its process is torn down when the session ends, so the
 server dies with the terminal. `long-running@1` only stops the sandbox from
 auto-stopping; it does not keep a session process alive.
 
-Two details of the hook matter:
+Three details of the hook matter:
 
 - `env:` is still listed. Install hooks are deny-by-default; sbx gives startup
   hooks the full sandbox environment, but the v3 spec says deny-by-default.
   Keep the list for portability and to document what the server needs. Without
-  it, a spec-conformant runtime starts without `OPENCODE_SERVER_PASSWORD` (no
-  auth) and without the provider credential sentinel.
+  it, a spec-conformant runtime starts without the provider credential sentinel.
 - `cd "$WORKSPACE_DIR"` sets the server's project root. Startup hooks start in
   the image `WORKDIR`, which is not the mounted workspace.
+- The password file is checked with `test -s` before the server starts: if it
+  is missing or empty the hook fails, so the port is never served
+  unauthenticated. `tr -d '\r\n'` strips the line ending Windows editors leave
+  behind.
 
 Start the sandbox without attaching — this boots the sandbox, runs the hook,
 and returns your prompt:
 
 ```powershell
-sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
+sbx env create
 ```
 
 For an in-sandbox TUI while the server runs: `sbx env exec -it -- opencode`.
@@ -122,9 +122,9 @@ clients.
 Do not bind the published port to a non-loopback host IP without TLS: basic
 auth would cross the network in cleartext.
 
-The first `sbx env create` asks you to approve a credential binding for the
-service (domain `opencode.ai`). The file pre-declares it, so approval is
-normally silent.
+The first `sbx env create` asks you to approve the additional workspace mount
+and a credential binding for the service (domain `opencode.ai`). The binding is
+pre-declared, so approval is normally silent; the mount appears in the plan.
 
 ## Session data
 
@@ -381,18 +381,22 @@ sbx env exec -- bash -c 'curl -s -o /dev/null -w "go %{http_code}\n" \
 # No stored credentials inside the server: placeholders only.
 sbx env exec -- bash -c 'env | grep -E "OPENCODE_API_KEY" | cut -d= -f1'
 
+# The password file reached the sandbox:
+sbx env exec -- bash -lc 'test -s "$WORKSPACE_DIR/../zaiware-secrets/server-password" && echo password file present'
+
 # The API server is listening and enforces the password:
 # 200 with credentials, 401 without (or with the wrong password).
 # Use /openapi.json: /global/health can return the SPA fallback with 200.
-$pw = $env:OPENCODE_PASSWORD
+$pw = $env:OPENCODE_PASSWORD   # or: Get-Content ..\zaiware-secrets\server-password -Raw
 curl.exe -s -o NUL -w "auth %{http_code}`n" -u "opencode:$pw" http://127.0.0.1:4096/openapi.json
 curl.exe -s -o NUL -w "anon %{http_code}`n" http://127.0.0.1:4096/openapi.json
 Remove-Variable pw
 ```
 
-If `anon` is not `401`, the password did not reach the server: the startup
-hook's `env:` list must include `OPENCODE_SERVER_PASSWORD`, and the value must
-be supplied with `--env-arg`/`--env-args-file` on every `sbx env` invocation.
+If `anon` is not `401`, the server either did not start or has no password.
+Check that `..\zaiware-secrets\server-password` exists on the host and is
+non-empty — the boot hook fails closed on a missing file, so the port is never
+served unauthenticated.
 
 Never run `/connect` in this sandbox — that stores the real key in the
 persisted OpenCode database (`~/.local/share/opencode/opencode.db`) as plaintext.
