@@ -1,0 +1,18 @@
+@page
+@model Zaiware.Platform.IdentityServer.Pages.IndexModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Signed in";
+}
+
+<div class="step done" id="step-done">
+  <div class="check" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <h1 id="title" tabindex="-1">You're in</h1>
+  <p class="sub">Signed in as <strong id="email-done">@Model.Email</strong></p>
+  <form method="post" asp-page="/Account/Logout">
+    <button class="btn ghost" type="submit" id="signout-btn">Sign out</button>
+  </form>
+</div>

@@ -1,0 +1,43 @@
+@page
+@model Zaiware.Platform.IdentityServer.Pages.Account.EnterOtpModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Check your email";
+}
+
+<div class="step" id="step-otp">
+  <a class="back" asp-page="/Account/Login" asp-route-email="@Model.Email">&#8592; Change email</a>
+  <h1 id="title" tabindex="-1">Check your email</h1>
+  <p class="sub">Enter the 8-character code sent to <strong id="email-out">@Model.Email</strong></p>
+  <p class="hint-text" id="otp-hint">Codes are single-use and the code expires in 5 minutes. It may take up to a minute to arrive.</p>
+  <form id="otp-form" method="post" asp-page="/Account/EnterOtp" novalidate>
+    <input type="hidden" asp-for="Input.Token">
+    <input type="hidden" asp-for="Input.Code" id="code">
+    <fieldset class="otp" id="otp" aria-describedby="otp-hint otp-error">
+      <legend class="sr-only">One-time code, 8 characters</legend>
+      <input inputmode="text" autocomplete="one-time-code" maxlength="1" aria-label="Character 1 of 8" autocapitalize="characters" spellcheck="false">
+      <input inputmode="text" maxlength="1" aria-label="Character 2 of 8" autocapitalize="characters" spellcheck="false">
+      <input inputmode="text" maxlength="1" aria-label="Character 3 of 8" autocapitalize="characters" spellcheck="false">
+      <input inputmode="text" maxlength="1" aria-label="Character 4 of 8" autocapitalize="characters" spellcheck="false">
+      <input inputmode="text" maxlength="1" aria-label="Character 5 of 8" autocapitalize="characters" spellcheck="false">
+      <input inputmode="text" maxlength="1" aria-label="Character 6 of 8" autocapitalize="characters" spellcheck="false">
+      <input inputmode="text" maxlength="1" aria-label="Character 7 of 8" autocapitalize="characters" spellcheck="false">
+      <input inputmode="text" maxlength="1" aria-label="Character 8 of 8" autocapitalize="characters" spellcheck="false">
+    </fieldset>
+    <span class="error" id="otp-error" role="alert" aria-live="polite" asp-validation-for="Input.Code"></span>
+    <div class="error" role="alert" aria-live="polite" asp-validation-summary="ModelOnly"></div>
+    @if (!string.IsNullOrEmpty(Model.ResendNotice))
+    {
+      <p class="error" role="alert" aria-live="polite">@Model.ResendNotice</p>
+    }
+    <button class="btn" type="submit" id="verify-btn">
+      <span class="label">Verify</span><span class="spinner" aria-hidden="true"></span>
+    </button>
+  </form>
+  <form method="post" asp-page="/Account/EnterOtp">
+    <p class="resend">Didn't get it?
+      <button type="submit" id="resend" asp-page-handler="Resend" data-blocked-until="@(Model.SendingBlockedUntilUtc?.UtcDateTime.ToString("O"))">Resend code</button>
+    </p>
+  </form>
+</div>
