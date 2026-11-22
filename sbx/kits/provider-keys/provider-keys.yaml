@@ -1,33 +1,22 @@
 # syntax=docker/sandbox-kit:3
 schemaVersion: "3"
 kind: mixin
-displayName: OpenCode provider keys (DeepSeek + OpenCode Go)
+displayName: OpenCode provider keys (OpenCode Go)
 
 # Grants only: network reachability and credential injection.
 # The provider -> env var mapping lives in .opencode/opencode.json, not here.
+# DeepSeek models are served through OpenCode Go (opencode-go/deepseek-*),
+# so there is no native DeepSeek credential anymore.
 
 capabilities:
   - type: com.docker.sandbox/network-policy@1
     config:
       runtime:
         allow:
-          - api.deepseek.com:443
           - opencode.ai:443
 
-  # Native DeepSeek API. Key value resolves from the host secret `deepseek`.
-  - type: com.docker.sandbox/credential@1
-    config:
-      service: deepseek
-      phase: runtime
-      apiKey:
-        name: DEEPSEEK_API_KEY
-        proxyManaged: true
-        inject:
-          - domain: api.deepseek.com
-            header: Authorization
-            format: "Bearer %s"
-
-  # OpenCode Go. Key value resolves from the host secret `opencode-go`.
+  # OpenCode Go (hosted inference at opencode.ai). Key value resolves from the
+  # host secret `opencode-go`.
   - type: com.docker.sandbox/credential@1
     config:
       service: opencode-go

@@ -1,11 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "providers": {
-    "deepseek": {
-      "env": [
-        "DEEPSEEK_API_KEY"
-      ]
-    },
     "opencode-go": {
       "env": [
         "OPENCODE_API_KEY"

@@ -1,6 +1,7 @@
 # Sandbox environment for Zaiware.Platform.
 #   sbx env plan     review what would change
-#   sbx env run      create (or attach) the sandbox
+#   sbx env create   create the sandbox without attaching
+#   sbx env run      create, or attach to, the sandbox
 #   sbx env rm       destroy the sandbox and its scoped secrets
 #
 # `sbx env` is experimental; pin your sbx version.
@@ -21,15 +22,21 @@ sandboxOptions:
 # auto-stopping, it does not keep a session process alive.
 # The API server is started by the opencode-server kit's lifecycle startup hook
 # at boot instead, and the sandbox is started without attaching:
-#   sbx env run --detach --env-args-file "$env:USERPROFILE\.sbx\zaiware.args"
+#   sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
 
-# Mounts the directory containing this file.
-workspace: .
+# Mounts the directory containing this file. Clone mode: the sandbox works in a
+# private git clone of the workspace instead of a bind mount, so host and sandbox
+# changes only meet through git (push/fetch). Same as the old `--clone` flag;
+# override per invocation with --clone=false.
+workspace:
+  path: .
+  clone: true
 
-# The server password is required at every invocation so it never lands in git.
-# Keep the args file OUTSIDE the mounted workspace, otherwise the agent can read it:
+# The server password is required at every invocation so it never lands in git:
+#   sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
+# To also keep it out of PowerShell history, store it OUTSIDE the repo and pass
+# --env-args-file instead:
 #   %USERPROFILE%\.sbx\zaiware.args
-#   sbx env run --env-args-file "$env:USERPROFILE\.sbx\zaiware.args"
 #
 # It does not hide the value from the agent: the server runs inside the sandbox,
 # so OPENCODE_SERVER_PASSWORD is in its environment. The password protects the
@@ -66,24 +73,17 @@ ports:
 # Secret provisioning. Prefer one of these two paths:
 #
 #   1) Host-scoped, once (persists across sandbox recreation):
-#        sbx secret set deepseek
 #        sbx secret set opencode-go
 #
 #   2) Declared here, provisioned per sandbox on create:
 #
 # secrets:
-#   deepseek:
-#     ref: 'op://Private/DeepSeek/api-key'      # 1Password CLI (`op`)
 #   opencode-go:
 #     command: 'gh auth token'                   # or any host command
 #
 # Never use `value:` — it stores plaintext in this file.
 
 bindings:
-  deepseek:
-    apiKey:
-      domains:
-        - api.deepseek.com
   opencode-go:
     apiKey:
       domains:

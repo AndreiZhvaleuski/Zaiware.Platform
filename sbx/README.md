@@ -10,13 +10,12 @@ placeholder for the real value on outbound requests.
 | Path | Role |
 |---|---|
 | `../sbxenv.yaml` | Environment file: agent, workspace, kits, args, ports, bindings. Must stay at the workspace root. |
-| `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for DeepSeek and OpenCode Go. |
+| `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for OpenCode Go. |
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
 | `kits/aspire/aspire.yaml` | Mixin: Aspire CLI (official install script) plus the runtime environment an AppHost needs. |
 | `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node); declares no network rules. |
 | `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`) and persists OpenCode data across recreation (`volume@1`). |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
-| `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 | `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 
 Split rationale: `opencode.json` is *agent* configuration and belongs in the
@@ -28,20 +27,18 @@ rules the Aspire and OpenSpec kits paid for: one install pattern, no unverified
 `requires`, no `NO_PROXY` override, bake into the image, and always verify
 after a full recreate.
 
-Before adding or changing a kit, read [`MIXINS.md`](MIXINS.md). It records the
-rules the Aspire and OpenSpec kits paid for: one install pattern, no unverified
-`requires`, no `NO_PROXY` override, bake into the image, and always verify
-after a full recreate.
-
 ## First run
 
 ```powershell
-# Store the API keys on the host, once. Each prompts for the value.
-sbx secret set deepseek
+# Store the API key on the host, once. Prompts for the value.
 sbx secret set opencode-go
 
-# One-time: pick a server password and keep it OUTSIDE the mounted workspace.
-# Give the same value to the client you run on this machine.
+# One-time: pick a server password and expose it to your shell as
+# $env:OPENCODE_PASSWORD. Give the same value to the client you run on
+# this machine.
+#
+# To keep it out of PowerShell history as well, store it OUTSIDE the repo and
+# pass --env-args-file instead:
 $dir = Join-Path $env:USERPROFILE '.sbx'
 New-Item -ItemType Directory -Force $dir | Out-Null
 $pw = Read-Host 'OpenCode server password' -MaskInput
@@ -51,14 +48,18 @@ Remove-Variable pw
 # Review, then start the sandbox without attaching: the boot hook starts the
 # API server.
 sbx env plan
-sbx env run --detach --env-args-file "$env:USERPROFILE\.sbx\zaiware.args"
+sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
 ```
 
-The args file lives outside the workspace on purpose: anything inside the repo
-is mounted into the sandbox and readable by the agent. It is not a secret from
-the agent regardless — `OPENCODE_SERVER_PASSWORD` is in the sandbox environment
-because the server runs there. The password protects the published host port
-from other host processes, not the agent from itself.
+If your pinned sbx CLI predates `sbx env create`, use
+`sbx env run --detach --env-arg ...` instead — it also boots the sandbox
+without attaching.
+
+The args file lives outside the repo on purpose: anything inside the workspace
+is readable by the agent. It is not a secret from the agent regardless —
+`OPENCODE_SERVER_PASSWORD` is in the sandbox environment because the server
+runs there. The password protects the published host port from other host
+processes, not the agent from itself.
 
 The password is required so the published port is not an open agent API.
 `sbxenv.yaml` maps it to `OPENCODE_SERVER_PASSWORD`, which is the variable
@@ -74,7 +75,7 @@ sandbox boot, in the background, so it is not tied to any `sbx` session:
 ```yaml
 startup:
   - command: cd "$WORKSPACE_DIR" && exec opencode serve --hostname 0.0.0.0 --port 4096
-    env: [WORKSPACE_DIR, OPENCODE_SERVER_PASSWORD, DEEPSEEK_API_KEY, OPENCODE_API_KEY,
+    env: [WORKSPACE_DIR, OPENCODE_SERVER_PASSWORD, OPENCODE_API_KEY,
           HTTP_PROXY, HTTPS_PROXY, NO_PROXY]
     background: true
 ```
@@ -90,23 +91,19 @@ Two details of the hook matter:
   hooks the full sandbox environment, but the v3 spec says deny-by-default.
   Keep the list for portability and to document what the server needs. Without
   it, a spec-conformant runtime starts without `OPENCODE_SERVER_PASSWORD` (no
-  auth) and without the provider credential sentinels.
-- `env:` is still listed. Install hooks are deny-by-default; sbx gives startup
-  hooks the full sandbox environment, but the v3 spec says deny-by-default.
-  Keep the list for portability and to document what the server needs. Without
-  it, a spec-conformant runtime starts without `OPENCODE_SERVER_PASSWORD` (no
-  auth) and without the provider credential sentinels.
+  auth) and without the provider credential sentinel.
 - `cd "$WORKSPACE_DIR"` sets the server's project root. Startup hooks start in
   the image `WORKDIR`, which is not the mounted workspace.
 
-Start the sandbox without attaching — this boots the sandbox, runs the hook, and
-returns your prompt:
+Start the sandbox without attaching — this boots the sandbox, runs the hook,
+and returns your prompt:
 
 ```powershell
-sbx env run --detach --env-args-file "$env:USERPROFILE\.sbx\zaiware.args"
+sbx env create --env-arg serverPassword=$env:OPENCODE_PASSWORD
 ```
 
 For an in-sandbox TUI while the server runs: `sbx env exec -it -- opencode`.
+Day to day, connect the desktop app to the server instead.
 
 Port publishing lives in `sbxenv.yaml` (`ports: 4096 -> 4096`, loopback only).
 For an existing sandbox, publish it manually:
@@ -116,33 +113,27 @@ sbx ports zaiware-platform --publish 4096:4096
 ```
 
 Client side: the server enforces HTTP basic auth with username `opencode` and
-the password from `zaiware.args`. Pass those credentials to the client
-(`curl -u`, or `http://opencode:<password>@127.0.0.1:4096` where a client accepts
-a URL). `OPENCODE_SERVER_PASSWORD` is the current server-side variable name;
+the password you chose. Pass those credentials to the client (`curl -u`, or
+`http://opencode:<password>@127.0.0.1:4096` where a client accepts a URL).
+`OPENCODE_SERVER_PASSWORD` is the current server-side variable name;
 `OPENCODE_PASSWORD` is the pre-rename spelling and may not be read by newer
 clients.
 
 Do not bind the published port to a non-loopback host IP without TLS: basic
 auth would cross the network in cleartext.
 
-The first `sbx env run` asks you to approve a credential binding for each
-service (domains `api.deepseek.com` and `opencode.ai`). The file pre-declares
-them, so approval is normally silent.
+The first `sbx env create` asks you to approve a credential binding for the
+service (domain `opencode.ai`). The file pre-declares it, so approval is
+normally silent.
 
 ## Session data
 
 `kits/opencode-server` declares a `volume@1` at
 `/home/agent/.local/share/opencode`. That is where OpenCode keeps the session
 database, messages, logs, snapshots, and `auth.json`, so `sbx env rm` followed
-by `sbx env run` reattaches the same data as long as the sandbox name stays
+by a create reattaches the same data as long as the sandbox name stays
 `zaiware-platform`.
 
-- The volume is keyed by **sandbox name + kit source + volume path**, not by
-  kit version. For a local source, moving `kits/opencode-server` or
-  `sbxenv.yaml` to another directory changes the identity and starts a fresh
-  volume.
-- Keep `path`, `mode`, and `size` unchanged. A difference refuses allocation
-  before the container is replaced.
 - The volume is keyed by **sandbox name + kit source + volume path**, not by
   kit version. For a local source, moving `kits/opencode-server` or
   `sbxenv.yaml` to another directory changes the identity and starts a fresh
@@ -171,24 +162,10 @@ by `sbx env run` reattaches the same data as long as the sandbox name stays
 
 `kits/dotnet` bakes a dotnetup-managed SDK into the image at build time. It is
 deliberately not a startup hook or an `sbx env exec` install: those repeat the
-~200 MB download on every `sbx env rm` / `sbx env run`, and the sandbox is
+~200 MB download on every `sbx env rm` / create, and the sandbox is
 recreated routinely. A mixin layer is part of the image digest, so every boot
 gets the same toolchain with no network round trip.
 
-- Version: the SDK is pinned by `sdkVersion` in `dotnet.yaml` (default
-  `10.0.401`), which must match `global.json`; bump both together. The dotnetup
-  manager comes from the `preview` quality channel, so it floats per build.
-  Record `dotnetup --version` when byte reproducibility matters.
-- Location: the dotnetup binary lives at `~/.dotnetup/dotnetup`; the SDK and
-  data live at `~/.local/share/dotnetup`. The install is built with
-  `HOME=/home/agent`, so the absolute paths in `dotnetup_manifest.json` stay
-  valid after the overlay lands on the workload. `dotnetup list`, `update`, and
-  `uninstall` work in the sandbox.
-- PATH: `/usr/local/bin/dotnet` links to the SDK muxer and
-  `/usr/local/bin/dotnetup` links to the manager; `/usr/local/bin` is already on
-  the sandbox `PATH`. No shell profile or startup hook is needed.
-- Writable state: `~/.dotnetup` must stay writable by uid 1000. dotnetup
-  creates an activity lock there on every command, not only for updates.
 - Version: the SDK is pinned by `sdkVersion` in `dotnet.yaml` (default
   `10.0.401`), which must match `global.json`; bump both together. The dotnetup
   manager comes from the `preview` quality channel, so it floats per build.
@@ -211,16 +188,11 @@ gets the same toolchain with no network round trip.
 - XDG: both install roots assume `XDG_DATA_HOME` is unset. If it is set,
   dotnetup reads a different data directory; the baked SDK and `dotnet` still
   work, but `dotnetup list` will look empty.
-- XDG: both install roots assume `XDG_DATA_HOME` is unset. If it is set,
-  dotnetup reads a different data directory; the baked SDK and `dotnet` still
-  work, but `dotnetup list` will look empty.
 - ICU: the opencode workload is a hardened Debian image without `libicu`, and
   the .NET host aborts at startup without it (`Couldn't find a valid ICU
   package`). The Dockerfile copies only the ICU shared libraries from the build
   stage into the overlay; `libssl` and `zlib` come from the workload.
 - Egress: the mixin grants NuGet restore (`api.nuget.org`, `*.nuget.org`) and
-  the endpoints needed for an in-sandbox SDK install. Add another feed's host
-  there if the project uses one.
   the endpoints needed for an in-sandbox SDK install. Add another feed's host
   there if the project uses one.
 
@@ -233,9 +205,7 @@ Verify after the next sandbox creation:
 ```powershell
 sbx env exec -- dotnet --version
 sbx env exec -- dotnetup --version
-sbx env exec -- dotnetup --version
 sbx env exec -- dotnetup list
-sbx env exec -- bash -lc 'readlink /usr/local/bin/dotnet; readlink /usr/local/bin/dotnetup'
 sbx env exec -- bash -lc 'readlink /usr/local/bin/dotnet; readlink /usr/local/bin/dotnetup'
 sbx env exec -- bash -lc 'dotnet build Zaiware.Platform.slnx'
 ```
@@ -261,18 +231,8 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   writable by the agent. Without a recognized sidecar the fallback is
   `ASPIRE_HOME`, then `$HOME/.aspire`. There is no `ASPIRE_CLI_HOME` or XDG
   state variable.
-- Layout: the CLI installs at the official default, `~/.aspire/bin/aspire`,
-  and `/usr/local/bin/aspire` is a symlink. The installer writes
-  `.aspire-install.json` next to the binary; for a script install the CLI keeps
-  logs, cache, hives, and versions in the parent (`~/.aspire`), which is
-  writable by the agent. Without a recognized sidecar the fallback is
-  `ASPIRE_HOME`, then `$HOME/.aspire`. There is no `ASPIRE_CLI_HOME` or XDG
-  state variable.
 - Dependency: the kit provides `aspire@<version>` but declares no `requires`;
   the dotnet kit must be listed before it in `sbxenv.yaml` and provides
-  `DOTNET_ROOT`. `requires` is valid v3 and is resolved at sandbox creation, but
-  it is not adopted until the isolated probe in `MIXINS.md` passes. Kit list
-  order is composition order, not a dependency resolver.
   `DOTNET_ROOT`. `requires` is valid v3 and is resolved at sandbox creation, but
   it is not adopted until the isolated probe in `MIXINS.md` passes. Kit list
   order is composition order, not a dependency resolver.
@@ -285,11 +245,6 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   image ships no trusted ASP.NET Core HTTPS development certificate. Use the
   `http` launch profile; the sandbox publishes loopback ports only.
 - Telemetry: `ASPIRE_CLI_TELEMETRY_OPTOUT=true`.
-- Updates: the CLI is image-managed. Bump `aspireVersion` and recreate. An
-  in-sandbox `aspire update` changes only that sandbox and is lost on the next
-  recreate, so it is not part of the workflow.
-- Uninstall: delete `~/.aspire` and `/usr/local/bin/aspire`; the install script
-  has no uninstall command.
 - Updates: the CLI is image-managed. Bump `aspireVersion` and recreate. An
   in-sandbox `aspire update` changes only that sandbox and is lost on the next
   recreate, so it is not part of the workflow.
@@ -344,7 +299,7 @@ dashboard has no authentication beyond that browser token, so keep it on
 loopback.
 
 A Kit change takes effect only when the sandbox is created again
-(`sbx env rm && sbx env run`); the OpenCode data volume keeps its sessions.
+(`sbx env rm && sbx env create`); the OpenCode data volume keeps its sessions.
 
 ## OpenSpec
 
@@ -371,8 +326,8 @@ pinned by `openspecVersion`.
   into the sandbox. `~/.config/openspec` and `~/.local/share/openspec` hold
   only disposable per-machine state.
 - If the client cannot connect after adding this Kit, confirm the sandbox was
-  recreated and give the background startup hook time to finish. `sbx env run
-  --detach` returns before `opencode serve` is listening; poll the authenticated
+  recreated and give the background startup hook time to finish. `sbx env create`
+  returns before `opencode serve` is listening; poll the authenticated
   API before starting the client. `sbx env exec` against a stopped sandbox
   starts it and runs the command immediately, so a `ps` right after can run
   before the hook has launched the server. A boot that runs the hook writes a
@@ -416,30 +371,28 @@ matching skill) is available.
 ## Verify
 
 ```powershell
-# Two distinct placeholders, never the real keys.
-sbx env exec -- bash -c 'env | grep -E "DEEPSEEK_API_KEY|OPENCODE_API_KEY"'
+# A placeholder, never the real key.
+sbx env exec -- bash -c 'env | grep -E "OPENCODE_API_KEY"'
 
-# Both must return 200. A 401 means the placeholder reached the API unchanged.
-sbx env exec -- bash -c 'curl -s -o /dev/null -w "deepseek %{http_code}\n" \
-  -H "Authorization: Bearer $DEEPSEEK_API_KEY" https://api.deepseek.com/v1/models'
+# Must return 200. A 401 means the placeholder reached the API unchanged.
 sbx env exec -- bash -c 'curl -s -o /dev/null -w "go %{http_code}\n" \
   -H "Authorization: Bearer $OPENCODE_API_KEY" https://opencode.ai/inference/go/openai/v1/models'
 
 # No stored credentials inside the server: placeholders only.
-sbx env exec -- bash -c 'env | grep -E "DEEPSEEK_API_KEY|OPENCODE_API_KEY" | cut -d= -f1'
+sbx env exec -- bash -c 'env | grep -E "OPENCODE_API_KEY" | cut -d= -f1'
 
 # The API server is listening and enforces the password:
 # 200 with credentials, 401 without (or with the wrong password).
 # Use /openapi.json: /global/health can return the SPA fallback with 200.
-$pw = (Get-Content "$env:USERPROFILE\.sbx\zaiware.args") -replace '^serverPassword=', ''
+$pw = $env:OPENCODE_PASSWORD
 curl.exe -s -o NUL -w "auth %{http_code}`n" -u "opencode:$pw" http://127.0.0.1:4096/openapi.json
 curl.exe -s -o NUL -w "anon %{http_code}`n" http://127.0.0.1:4096/openapi.json
 Remove-Variable pw
 ```
 
-If `anon` is not `401`, the password did not reach the server: `cmd:` is the
-launch command, so it must be set in `sbxenv.yaml` (the server reads
-`OPENCODE_SERVER_PASSWORD` from the workload environment).
+If `anon` is not `401`, the password did not reach the server: the startup
+hook's `env:` list must include `OPENCODE_SERVER_PASSWORD`, and the value must
+be supplied with `--env-arg`/`--env-args-file` on every `sbx env` invocation.
 
 Never run `/connect` in this sandbox — that stores the real key in the
 persisted OpenCode database (`~/.local/share/opencode/opencode.db`) as plaintext.
@@ -448,22 +401,25 @@ persisted OpenCode database (`~/.local/share/opencode/opencode.db`) as plaintext
 
 | Provider id | Example model | Auth |
 |---|---|---|
-| `deepseek` | `deepseek/deepseek-flash`, `deepseek/deepseek-v4-pro` | `DEEPSEEK_API_KEY` |
 | `opencode-go` | `opencode-go/kimi-k3`, `opencode-go/deepseek-v4.1-flash` | `OPENCODE_API_KEY` |
 | `opencode` | `opencode/deepseek-v4.1-flash-free` | none (free tier) |
 
+The native `deepseek` provider was dropped: OpenCode Go already serves the
+DeepSeek models this project uses (`opencode-go/deepseek-v4.1-flash`), so one
+credential covers everything.
+
 ## Lifecycle
 
-- Secrets are host-scoped, so recreating the sandbox keeps them: `sbx env rm && sbx env run`.
-- Rotating a key: `sbx secret set deepseek` again. Placeholders are stable, so no restart is needed.
-- Session history is stored in a kit volume (`~/.local/share/opencode`), so `sbx env rm && sbx env run` keeps sessions when the sandbox name, kit source, and volume path stay the same. A different name or a moved kit directory starts empty.
+- Secrets are host-scoped, so recreating the sandbox keeps them: `sbx env rm && sbx env create`.
+- Rotating a key: `sbx secret set opencode-go` again. Placeholders are stable, so no restart is needed.
+- Session history is stored in a kit volume (`~/.local/share/opencode`), so `sbx env rm` followed by a create keeps sessions when the sandbox name, kit source, and volume path stay the same. A different name or a moved kit directory starts empty.
 - Do not run `sbx reset` — it deletes all stored host secrets.
 
 ## Protecting this directory
 
 `sbxenv.yaml` is mounted read-only because it sits at the workspace root.
 `sbx/` is not: it is an ordinary part of the workspace, so the agent can edit
-the kits that a later `sbx env run` builds and executes. Make it a read-only
+the kits that a later create builds and executes. Make it a read-only
 additional workspace in `sbxenv.yaml` (this file is read-only in the sandbox, so
 apply the edit on the host):
 
@@ -477,6 +433,10 @@ Additional workspaces mount after the primary workspace, so the `:ro` mount
 shadows `<workspace>/sbx`. Kit sources remain editable on the host and
 read-only inside the sandbox. Nested read-only mounts are supported; they no
 longer unmount on host file changes as of sbx v0.42.0.
+
+With clone mode (`workspace: {path: ., clone: true}`) the sandbox edits a
+private git clone, so the agent cannot influence what the host executes in
+the first place; this section matters if you switch to direct mounting.
 
 Trade-off: the whole directory, including this README, is read-only in the
 sandbox, so git operations that would modify `sbx/` (checkout to a branch that

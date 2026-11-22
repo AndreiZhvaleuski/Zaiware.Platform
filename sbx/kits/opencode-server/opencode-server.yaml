@@ -41,7 +41,6 @@ capabilities:
           env:
             - WORKSPACE_DIR
             - OPENCODE_SERVER_PASSWORD
-            - DEEPSEEK_API_KEY
             - OPENCODE_API_KEY
             - HTTP_PROXY
             - HTTPS_PROXY
