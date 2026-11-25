@@ -10,6 +10,10 @@
   <h1 id="title" tabindex="-1">Sign in</h1>
   <p class="sub">We'll email you a one-time code.</p>
   <p class="hint-text" id="email-hint">No password needed — the code expires in 5 minutes.</p>
+  @if (Model.SessionExpired)
+  {
+    <div class="notice" role="alert">Your sign-in session expired or a required browser cookie was blocked. Please request a new code.</div>
+  }
   <form id="email-form" method="post" asp-page="/Account/Login" novalidate>
     <label asp-for="Input.Email">Work email</label>
     <input asp-for="Input.Email" id="email" type="email" inputmode="email"

@@ -13,7 +13,8 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 public sealed class EnterOtpModel(
     IOtpAuthenticator otpAuthenticator,
     IOtpSender otpSender,
-    IIdentityServerInteractionService interaction) : PageModel
+    IIdentityServerInteractionService interaction,
+    ILogger<EnterOtpModel> logger) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -39,7 +40,12 @@ public sealed class EnterOtpModel(
 
         if (string.IsNullOrEmpty(token))
         {
-            return RedirectToPage("/Account/Login");
+            logger.LogWarning("EnterOtp requested without an active OTP session (browser cookie missing, blocked, or expired); redirecting to login.");
+            return RedirectToPage("/Account/Login", new
+            {
+                email = TempData["OtpEmail"]?.ToString(),
+                sessionExpired = true,
+            });
         }
 
         Input.Token = token;
@@ -52,7 +58,8 @@ public sealed class EnterOtpModel(
     {
         if (string.IsNullOrEmpty(Input.Token))
         {
-            return RedirectToPage("/Account/Login");
+            logger.LogWarning("EnterOtp requested without an active OTP session (browser cookie missing, blocked, or expired); redirecting to login.");
+            return RedirectToPage("/Account/Login", new { sessionExpired = true });
         }
 
         if (!OtpToken.TryCreate(Input.Token, out var token))

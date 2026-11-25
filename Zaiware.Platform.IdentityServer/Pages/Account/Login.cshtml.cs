@@ -19,6 +19,8 @@ public sealed class LoginModel(
     [BindProperty]
     public InputModel Input { get; set; } = new();
 
+    public bool SessionExpired { get; private set; }
+
     public sealed class InputModel
     {
         [Required]
@@ -26,8 +28,13 @@ public sealed class LoginModel(
         public string Email { get; set; } = string.Empty;
     }
 
-    public IActionResult OnGet(string? email = null, string? returnUrl = null)
+    public IActionResult OnGet(string? email = null, string? returnUrl = null, bool sessionExpired = false)
     {
+        if (sessionExpired)
+        {
+            SessionExpired = true;
+        }
+
         // A valid session skips the email step; honor the original destination when it is safe.
         if (User.Identity?.IsAuthenticated == true)
         {
@@ -83,6 +90,9 @@ public sealed class LoginModel(
         {
             ModelState.AddModelError(
                 "Input.Email",
+                "No account found for this address. Sign-in is by invitation — ask an administrator for access.");
+            ModelState.AddModelError(
+                string.Empty,
                 "No account found for this address. Sign-in is by invitation — ask an administrator for access.");
             return Page();
         }

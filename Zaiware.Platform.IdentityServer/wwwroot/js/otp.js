@@ -250,5 +250,12 @@
       var emailOut = $('email-done');
       announce("You're signed in" + (emailOut && emailOut.textContent ? ' as ' + emailOut.textContent : '') + '.');
     }
+
+    var notice = document.querySelector('.notice');
+    if (notice && notice.textContent.trim()) announce(notice.textContent.trim());
+
+    if (step.id === 'step-email' && emailInput && emailError && emailError.textContent.trim()) {
+      emailInput.focus();
+    }
   });
 })();

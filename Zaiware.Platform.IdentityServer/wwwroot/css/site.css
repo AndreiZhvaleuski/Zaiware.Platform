@@ -204,11 +204,19 @@ input:disabled{opacity:.55; cursor:not-allowed}
 .btn.is-loading .spinner{display:block}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* A prominent, non-field callout (for example, an expired sign-in session). */
+.notice{
+  margin:0 0 16px; padding:12px 14px; border-radius:12px;
+  font-size:.875rem; font-weight:600; color:var(--danger-deep);
+  background:rgba(255,235,232,.85); border:1px solid rgba(179,38,30,.35);
+  box-shadow:0 1px 0 var(--highlight) inset;
+}
+
 /* The validation tag helpers may swap in their own class, so style those too. */
 .error,
 .field-validation-error,
 .validation-summary-errors{
-  margin:8px 2px 0; font-size:.8125rem; color:var(--danger);
+  margin:8px 2px 0; font-size:.875rem; color:var(--danger);
   display:flex; gap:6px; align-items:flex-start;
 }
 .error:empty,
@@ -218,6 +226,11 @@ input:disabled{opacity:.55; cursor:not-allowed}
 .validation-summary-errors ul{margin:0; padding:0; list-style:none}
 .error li,
 .validation-summary-errors li{margin:0}
+.validation-summary-errors{
+  border-left:3px solid var(--danger);
+  padding-left:10px;
+  font-weight:600;
+}
 
 /* keep the request's fields visible to the browser while the form is in flight */
 form[aria-busy="true"] input{pointer-events:none; background:rgba(255,255,255,.35)}
