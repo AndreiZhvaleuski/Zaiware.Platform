@@ -158,6 +158,32 @@ Hooks:
 | `port@1` | A host-allocated port | Host chooses the port; omitted `family` is `ipv4`. Prefer explicit `ports:` in `sbxenv.yaml` for a stable port. A failed publish aborts creation. |
 | `agent-context@1` | Agent instructions | Applied at create. Documentation belongs in this file, not in agent context. |
 
+### Agent context
+
+An ordinary tool mixin normally contributes only an instruction body. An agent
+mixin can also declare `filename` together with an explicit `directory`:
+
+```yaml
+capabilities:
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      filename: AGENTS.md
+      directory: /home/agent/.config/opencode
+      contentFile: ./opencode-server-context.md
+```
+
+OpenCode reads global instructions from
+`/home/agent/.config/opencode/AGENTS.md`; `opencode-server` is its agent mixin,
+so it declares that explicit destination. The frontend stages `contentFile`
+under `/usr/share/sandbox/kit/<kit>/` and adds a kit index entry pointing at the
+staged file. Do not copy the same file in the Dockerfile as well: the staged
+copy and the generated index are the capability's output.
+
+Agent context is applied at create time. `sbx env exec` and attaching to an
+existing sandbox do not apply it; recreate the sandbox and verify the generated
+`AGENTS.md` before recording evidence. Do not add an evidence-log entry until a
+full build/recreate and verification have actually passed.
+
 ## 7. Phases
 
 | Phase | What it proves | What it cannot prove |

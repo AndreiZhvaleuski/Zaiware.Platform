@@ -1,7 +1,7 @@
 # Sandbox environment for Zaiware.Platform.
 #   sbx env plan     review what would change
-#   sbx env create   create the sandbox without attaching
-#   sbx env run      create, or attach to, the sandbox
+#   sbx env create   normal startup: boot without attaching, run the server hook
+#   sbx env run      create, or attach to, the sandbox (not the normal startup)
 #   sbx env rm       destroy the sandbox and its scoped secrets
 #
 # No arguments are needed for any of these commands.
@@ -24,13 +24,14 @@ sandboxOptions:
 # server dies with the terminal. long-running@1 stops the sandbox from
 # auto-stopping, it does not keep a session process alive.
 # The API server is started by the opencode-server kit's lifecycle startup hook
-# at boot instead, and the sandbox is started without attaching:
-#   sbx env create
+# at boot instead. Normal startup is always `sbx env create`: it starts the
+# sandbox without attaching and lets the boot hook launch the server.
 
 # Mounts the directory containing this file. Clone mode: the sandbox works in a
 # private git clone of the workspace instead of a bind mount, so host and sandbox
-# changes only meet through git (push/fetch). Same as the old `--clone` flag;
-# override per invocation with --clone=false.
+# changes only meet through Git commits and retrieval. Clone mode is mandatory
+# for the normal workflow; do not override it with --clone=false. Retrieve
+# commits on the host with `git pull sandbox-zaiware-platform <branch>`.
 workspace:
   path: .
   clone: true
@@ -59,7 +60,8 @@ kits:
   # Network access + credential injection. Adds no files to the image.
   - ./sbx/kits/provider-keys
   # Adds the pinned OpenCode binary, starts the server at boot, keeps the
-  # sandbox alive, and persists OpenCode state across recreation.
+  # sandbox alive, persists OpenCode state across recreation, and injects the
+  # sandbox workflow instructions through agent-context@1.
   - ./sbx/kits/opencode-server
   - ./sbx/kits/dotnet
   # Aspire CLI and the environment an AppHost needs (DOTNET_ROOT, DCP IPv4,

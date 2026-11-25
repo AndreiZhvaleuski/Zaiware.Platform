@@ -14,7 +14,8 @@ placeholder for the real value on outbound requests.
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
 | `kits/aspire/aspire.yaml` | Mixin: Aspire CLI (official install script) plus the runtime environment an AppHost needs. |
 | `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node) and its GitHub runtime access. |
-| `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), and persistent OpenCode data (`volume@1`). |
+| `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), persistent OpenCode data (`volume@1`), and the OpenCode `AGENTS.md` context profile (`agent-context@1`). |
+| `kits/opencode-server/opencode-server-context.md` | Injected `AGENTS.md` profile: server-mode, clone-only workspace, and Git handoff workflow. |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 | `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 
@@ -112,15 +113,18 @@ Three details of the hook matter:
   unauthenticated. `tr -d '\r\n'` strips the line ending Windows editors leave
   behind.
 
-Start the sandbox without attaching — this boots the sandbox, runs the hook,
-and returns your prompt:
+Normal operation always uses the boot-managed server started by
+`sbx env create`. Start the sandbox without attaching — this boots the sandbox,
+runs the hook, and returns your prompt:
 
 ```powershell
 sbx env create
 ```
 
-For an in-sandbox TUI while the server runs: `sbx env exec -it -- opencode`.
-Day to day, connect the desktop app to the server instead.
+An attached `sbx env run` is an interactive exec session, not the normal server
+startup path. For an in-sandbox TUI while the server runs:
+`sbx env exec -it -- opencode`. Day to day, connect the desktop app to the server
+instead.
 
 Port publishing lives in `sbxenv.yaml` (`ports: 4096 -> 4096`, loopback only).
 For an existing sandbox, publish it manually:
@@ -142,6 +146,41 @@ auth would cross the network in cleartext.
 The first `sbx env create` asks you to approve the additional workspace mount
 and a credential binding for the service (domain `opencode.ai`). The binding is
 pre-declared, so approval is normally silent; the mount appears in the plan.
+
+## Agent workflow and Git handoff
+
+`kits/opencode-server` declares an `agent-context@1` capability that writes
+OpenCode's global instruction file to
+`/home/agent/.config/opencode/AGENTS.md` from
+[`opencode-server-context.md`](kits/opencode-server/opencode-server-context.md).
+The capability adds a kit index entry pointing at the staged context file under
+`/usr/share/sandbox/kit/opencode-server/`; it does not create a repository-root
+`AGENTS.md`.
+
+The generated profile requires the agent to:
+
+- use the boot-managed OpenCode server started by `sbx env create`;
+- edit only the private Git clone at `$WORKSPACE_DIR`, never the read-only host
+  source at `/run/sandbox/source`;
+- commit completed file-changing tasks in the sandbox and report the branch and
+  commit hash.
+
+The Docker sbx remote `sandbox-zaiware-platform` exists on the **host**: it lets
+the host fetch commits from the sandbox. It is not available inside the sandbox,
+so the agent must never run `git push sandbox-zaiware-platform`. After the agent
+reports a branch and commit, retrieve the work from the host repository with the
+corresponding branch checked out:
+
+```powershell
+git pull sandbox-zaiware-platform <branch>
+```
+
+Do not remove or recreate the sandbox before retrieving commits that exist only
+in its private clone; `sbx env rm` deletes that clone.
+
+Changing the kit context requires a full sandbox recreation before it takes
+effect. `sbx env exec` and attaching to the existing sandbox do not apply new
+agent context.
 
 ## Session data
 
@@ -409,7 +448,17 @@ $pw = $env:OPENCODE_PASSWORD   # or: Get-Content ..\zaiware-secrets\server-passw
 curl.exe -s -o NUL -w "auth %{http_code}`n" -u "opencode:$pw" http://127.0.0.1:4096/openapi.json
 curl.exe -s -o NUL -w "anon %{http_code}`n" http://127.0.0.1:4096/openapi.json
 Remove-Variable pw
+
+# The generated OpenCode workflow profile and its staged context:
+sbx env exec -- test -s /home/agent/.config/opencode/AGENTS.md
+sbx env exec -- cat /home/agent/.config/opencode/AGENTS.md
+sbx env exec -- test -s /usr/share/sandbox/kit/opencode-server/opencode-server-context.md
 ```
+
+The `AGENTS.md` output must contain the kit index/reference for
+`opencode-server`, and the staged context must contain the server-mode,
+clone-only, commit, and host-pull instructions. This mechanism does not create a
+repository-root `AGENTS.md`.
 
 If `anon` is not `401`, the server either did not start or has no password.
 Check that `..\zaiware-secrets\server-password` exists on the host and is

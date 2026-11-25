@@ -4,7 +4,8 @@ kind: mixin
 displayName: OpenCode server
 description: >-
   Pinned OpenCode CLI/server binary for the shell workload, API server startup
-  hook, and persistent OpenCode session data.
+  hook, persistent OpenCode session data, and injected sandbox workflow
+  instructions.
 sourceUrl: https://opencode.ai/docs/
 licenses: [MIT]
 
@@ -53,6 +54,16 @@ args:
 # freshly created mount root before any agent hook writes to it.
 
 capabilities:
+  # OpenCode reads global instructions from AGENTS.md in its config directory.
+  # agent-context@1 generates that file and adds a kit index entry pointing to
+  # the context staged from contentFile. The kit frontend stages contentFile;
+  # do not copy it in the Dockerfile as well.
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      filename: AGENTS.md
+      directory: /home/agent/.config/opencode
+      contentFile: ./opencode-server-context.md
+
   - type: com.docker.sandbox/volume@1
     config:
       path: /home/agent/.local/share/opencode
