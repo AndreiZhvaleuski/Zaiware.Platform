@@ -13,8 +13,8 @@ placeholder for the real value on outbound requests.
 | `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for OpenCode Go. |
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
 | `kits/aspire/aspire.yaml` | Mixin: Aspire CLI (official install script) plus the runtime environment an AppHost needs. |
-| `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node); declares no network rules. |
-| `kits/opencode-server/opencode-server.yaml` | Mixin: keeps the sandbox up after the last client disconnects (`long-running@1`) and persists OpenCode data across recreation (`volume@1`). |
+| `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node) and its GitHub runtime access. |
+| `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), and persistent OpenCode data (`volume@1`). |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 | `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 
@@ -64,6 +64,23 @@ rather than serving an unauthenticated port. The client authenticates as
 `opencode` with this password.
 
 ## OpenCode API server
+
+The only workload is `docker.io/sbx/shell:1.0.0`, selected for its Docker
+Engine, Compose, Buildx, Git, and Debian/glibc runtime. `agent: shell` selects
+its registered name. The `opencode-server` mixin adds OpenCode **2.4.1**, MCP
+gateway registration, the headless API server, and persistent state; no
+interactive OpenCode workload or ACP/TUI integration is needed.
+
+The mixin installs the pinned binary with OpenCode's official v2 installer,
+which selects the correct glibc build. The upstream
+`ghcr.io/anomalyco/opencode:2.4.1` image is deliberately not used: it is an
+Alpine/musl runtime, not an sbx kit, and its binary is incompatible with this
+Debian/glibc composition. Do not combine this mixin with `sbx/opencode`, which
+already provides the same feature and binary paths.
+
+To upgrade, bump `opencodeVersion` and the matching `OPENCODE_VERSION`
+build-arg default, then recreate the sandbox. After recreation,
+`sbx env exec -- opencode --version` must print `opencode v2.4.1`.
 
 The server is started by `kits/opencode-server`'s `lifecycle@1` startup hook at
 sandbox boot, in the background, so it is not tied to any `sbx` session:
@@ -188,7 +205,7 @@ gets the same toolchain with no network round trip.
 - XDG: both install roots assume `XDG_DATA_HOME` is unset. If it is set,
   dotnetup reads a different data directory; the baked SDK and `dotnet` still
   work, but `dotnetup list` will look empty.
-- ICU: the opencode workload is a hardened Debian image without `libicu`, and
+- ICU: the shell workload is a hardened Debian image without `libicu`, and
   the .NET host aborts at startup without it (`Couldn't find a valid ICU
   package`). The Dockerfile copies only the ICU shared libraries from the build
   stage into the overlay; `libssl` and `zlib` come from the workload.
@@ -319,8 +336,9 @@ pinned by `openspecVersion`.
   on `sbx env rm`. A mixin layer is part of the image digest.
 - Updates: bump `openspecVersion` and recreate. An in-sandbox `openspec update`
   or `openspec install` changes only that sandbox and is lost on the next
-  recreate. The mixin declares no network rules: the OpenCode workload already
-  allows `github.com`, `api.github.com`, and `*.githubusercontent.com`.
+  recreate. The mixin grants `github.com`, `api.github.com`, and
+  `*.githubusercontent.com` for runtime updates and GitHub repository
+  operations; its build-time installer uses the host network instead.
 - No state volume: the artifacts that matter (`openspec/` and the
   `openspec-*` skills) are written into the workspace by `openspec init`, not
   into the sandbox. `~/.config/openspec` and `~/.local/share/openspec` hold

@@ -16,6 +16,9 @@ volume retention across `sbx env rm` requires v0.50+.
   its owner. Different files in the same directory merge.
 - Two kits writing the **same file path** collide. Sharing a directory such as
   `/usr/local/bin` is fine.
+- The selected agent workload is part of the same composition. Pin its versioned
+  workload reference in `sbxenv.yaml`; do not add a mixin that duplicates its
+  `provides` entry or replaces its binary paths.
 - Kits are create-time. `sbx env run` against an existing sandbox attaches.
   `sbx env exec` attaches and skips lifecycle commands.
 - `--detach` starts only the sandbox; it cannot be combined with arguments
@@ -40,6 +43,7 @@ in a startup hook: the runtime already has `HOME=/home/agent`.
 | Tool | Real install | `/usr/local/bin` | Mutable state |
 |---|---|---|---|
 | Aspire | `~/.aspire/bin/aspire` + `libhex1binterop.so`, `Aspire.TypeSystem.xml`, `.aspire-install.json` | `aspire` | `~/.aspire/*`; also `~/.cache/Microsoft/DeveloperTools`, `~/.dcp`, `~/.cache/dcp` |
+| OpenCode | `~/.opencode/bin/opencode` | `opencode` | `~/.config/opencode` + `~/.local/share/opencode` (persistent kit volume) |
 | dotnet | `~/.local/share/dotnetup/dotnet/dotnet` | `dotnet` | `~/.local/share/dotnetup` |
 | dotnetup | `~/.dotnetup/dotnetup` | `dotnetup` | `~/.local/share/dotnetup` + writable `~/.dotnetup` |
 | OpenSpec | `~/.local/bin/openspec` | `openspec` | `~/.config/openspec` + `~/.local/share/openspec` |
@@ -71,6 +75,7 @@ Ownership:
 |---|---|
 | `/out/home/agent` | 1000 |
 | `~/.aspire`, `~/.aspire/bin` | 1000 |
+| `~/.opencode`, `~/.opencode/bin`, `~/.opencode/bin/opencode` | 1000 |
 | `~/.dotnetup`, `~/.local/share/dotnetup` | 1000 |
 | `~/.local`, `~/.local/share` | 1000 |
 | `~/.local/bin` | root |

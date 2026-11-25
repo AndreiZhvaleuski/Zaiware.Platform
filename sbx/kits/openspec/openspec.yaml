@@ -8,7 +8,7 @@
 #
 # The installer verifies the release archive against the release's SHA256SUMS
 # and drops the native binary in the official default, ~/.local/bin, which the
-# OpenCode workload already has on PATH. The binary needs only glibc, which the
+# shell workload already has on PATH. The binary needs only glibc, which the
 # workload ships. A /usr/local/bin symlink gives every kit the same PATH entry.
 #
 # Project state does not live here: `openspec init` writes openspec/ and
@@ -16,18 +16,27 @@
 # the repository. The CLI's per-machine state (~/.config/openspec and
 # ~/.local/share/openspec) is disposable, so no volume is needed.
 #
-# No network-policy capability on purpose. The OpenCode workload already allows
-# github.com, api.github.com, and *.githubusercontent.com. The installer itself
-# runs at image build time on the host.
+# The network rules cover runtime updates and GitHub repository operations.
+# The installer itself runs at image build time on the host and needs no sandbox
+# runtime grant.
 schemaVersion: "3"
 displayName: OpenSpec CLI
 description: >-
   The OpenSpec CLI, installed with OpenSpec's standalone installer (no Node.js
-  needed). Adds no network rules of its own.
+  needed), plus the GitHub runtime access its update workflow uses.
 sourceUrl: https://openspec.dev/docs/installation
 licenses: [MIT]
 
 kind: mixin
+
+capabilities:
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow:
+          - github.com:443
+          - api.github.com:443
+          - "*.githubusercontent.com:443"
 
 provides:
   - "openspec@${{ kit.args.openspecVersion }}"

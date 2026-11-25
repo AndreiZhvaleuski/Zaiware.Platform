@@ -1,8 +1,28 @@
 # syntax=docker/sandbox-kit:3
 schemaVersion: "3"
 kind: mixin
-displayName: OpenCode server lifecycle
+displayName: OpenCode server
+description: >-
+  Pinned OpenCode CLI/server binary for the shell workload, API server startup
+  hook, and persistent OpenCode session data.
+sourceUrl: https://opencode.ai/docs/
+licenses: [MIT]
 
+provides:
+  - "opencode@${{ kit.args.opencodeVersion }}"
+
+args:
+  opencodeVersion:
+    default: "2.4.1"
+    pattern: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
+    description: Exact OpenCode version to install (bare or v-prefixed)
+    buildArg: OPENCODE_VERSION
+
+# The companion Dockerfile installs the pinned glibc binary with OpenCode's
+# official v2 installer. Bump opencodeVersion and recreate to upgrade. This
+# mixin must compose with the shell workload, not the opencode workload, which
+# already provides the same feature and binary paths.
+#
 # Runs `opencode serve` on every sandbox boot, in the background, so the API
 # server is not tied to an sbx session. long-running@1 keeps the sandbox alive
 # after the last client disconnects.
@@ -44,7 +64,28 @@ capabilities:
         - command: install -d -o agent -g agent -m 0755 /home/agent/.local/share/opencode
           user: "0"
           description: Make the OpenCode data volume writable by agent
+        - command: mkdir -p /home/agent/.config/opencode && chown agent:agent /home/agent/.config /home/agent/.config/opencode
+          user: "0"
+          description: Make the OpenCode config directory writable by agent
       startup:
+        - command: |
+            set -e
+            [ -n "$MCP_GATEWAY_URL" ] || exit 0
+            mkdir -p "$HOME/.config/opencode"
+            cfg="$HOME/.config/opencode/opencode.json"
+            frag=/tmp/sandbox-mcp-gateway.json
+            jq -n --arg url "$MCP_GATEWAY_URL" --arg auth "Bearer $MCP_SENTINEL_TOKEN_NAME" \
+              '{"$schema": "https://opencode.ai/config.json", mcp: {"mcp-gateway": {type: "remote", url: $url, enabled: true, headers: {Authorization: $auth}}}}' > "$frag"
+            [ -f "$cfg" ] || echo '{}' > "$cfg"
+            jq -s '.[0] * .[1]' "$cfg" "$frag" > "$cfg.tmp"
+            mv "$cfg.tmp" "$cfg"
+            rm -f "$frag"
+          env:
+            - HOME
+            - MCP_GATEWAY_URL
+            - MCP_SENTINEL_TOKEN_NAME
+          user: agent
+          description: Register the sandbox MCP gateway with OpenCode
         - command: cd "$WORKSPACE_DIR" && test -s ../zaiware-secrets/server-password && export OPENCODE_SERVER_PASSWORD="$(tr -d '\r\n' < ../zaiware-secrets/server-password)" && exec opencode serve --hostname 0.0.0.0 --port 4096
           env:
             - WORKSPACE_DIR
