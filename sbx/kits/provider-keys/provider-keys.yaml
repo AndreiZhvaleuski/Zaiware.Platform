@@ -9,6 +9,11 @@ displayName: OpenCode provider keys (OpenCode Go)
 # so there is no native DeepSeek credential anymore.
 
 capabilities:
+  # Focused agent guidance: the key is a proxy-managed placeholder.
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      contentFile: ./provider-keys-context.md
+
   - type: com.docker.sandbox/network-policy@1
     config:
       runtime:

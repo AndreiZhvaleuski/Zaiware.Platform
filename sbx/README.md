@@ -11,11 +11,15 @@ placeholder for the real value on outbound requests.
 |---|---|
 | `../sbxenv.yaml` | Environment file: agent, workspace, kits, args, ports, bindings. Must stay at the workspace root. |
 | `kits/provider-keys/provider-keys.yaml` | Mixin: network grants + credential injection for OpenCode Go. |
+| `kits/provider-keys/provider-keys-context.md` | Agent context: proxy-managed key placeholder and safe credential handling. |
 | `kits/dotnet/dotnet.yaml` | Mixin: dotnetup-managed .NET SDK plus the ICU libraries the workload omits. |
+| `kits/dotnet/dotnet-context.md` | Agent context: preinstalled SDK and configured `DOTNET_ROOT`. |
 | `kits/aspire/aspire.yaml` | Mixin: Aspire CLI (official install script) plus the runtime environment an AppHost needs. |
+| `kits/aspire/aspire-context.md` | Agent context: HTTP launch profile, configured environment, and Aspire commands. |
 | `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node) and its GitHub runtime access. |
+| `kits/openspec/openspec-context.md` | Agent context: project artifacts, workflow skills, and init guidance. |
 | `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), persistent OpenCode data (`volume@1`), and the OpenCode `AGENTS.md` context profile (`agent-context@1`). |
-| `kits/opencode-server/opencode-server-context.md` | Injected `AGENTS.md` profile: server-mode, clone-only workspace, and Git handoff workflow. |
+| `kits/opencode-server/opencode-server-context.md` | Injected global `AGENTS.md` profile: server-mode, clone-only workspace, and Git handoff workflow. |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 | `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 
@@ -147,15 +151,29 @@ The first `sbx env create` asks you to approve the additional workspace mount
 and a credential binding for the service (domain `opencode.ai`). The binding is
 pre-declared, so approval is normally silent; the mount appears in the plan.
 
-## Agent workflow and Git handoff
+## Agent context and Git handoff
 
-`kits/opencode-server` declares an `agent-context@1` capability that writes
-OpenCode's global instruction file to
+Each local kit contributes focused agent context through `agent-context@1`:
+
+- `provider-keys`: `OPENCODE_API_KEY` is a proxy-managed placeholder; never
+  persist a real key or run `/connect`.
+- `dotnet`: `dotnet` and `dotnetup` are preinstalled; use the baked SDK with the
+  configured `DOTNET_ROOT`.
+- `aspire`: use the `http` launch profile and the preconfigured environment;
+  start, inspect, and stop through the Aspire CLI.
+- `openspec`: use the workflow skills in `.agents/skills/openspec-*` and keep
+  project artifacts under `openspec/`.
+- `opencode-server`: use server mode, edit only the clone, and commit completed
+  work for host retrieval.
+
+The four ordinary tool kits use the `agent-context@1` body-only form: their
+config contains only `contentFile`. The frontend stages each body under
+`/usr/share/sandbox/kit/<kit>/` and adds a kit index entry; ordinary bodies are
+not written as global instruction files. `opencode-server` additionally owns the
+explicit global profile: its `agent-context@1` entry writes
 `/home/agent/.config/opencode/AGENTS.md` from
 [`opencode-server-context.md`](kits/opencode-server/opencode-server-context.md).
-The capability adds a kit index entry pointing at the staged context file under
-`/usr/share/sandbox/kit/opencode-server/`; it does not create a repository-root
-`AGENTS.md`.
+The mechanism does not create a repository-root `AGENTS.md`.
 
 The generated profile requires the agent to:
 
@@ -449,16 +467,18 @@ curl.exe -s -o NUL -w "auth %{http_code}`n" -u "opencode:$pw" http://127.0.0.1:4
 curl.exe -s -o NUL -w "anon %{http_code}`n" http://127.0.0.1:4096/openapi.json
 Remove-Variable pw
 
-# The generated OpenCode workflow profile and its staged context:
+# Every local kit's context is staged, and the generated profile indexes it:
+sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec opencode-server; do test -s "/usr/share/sandbox/kit/$k/$k-context.md" || { echo "missing $k"; exit 1; }; done'
+sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec opencode-server; do grep -q "$k" /home/agent/.config/opencode/AGENTS.md || { echo "missing index $k"; exit 1; }; done'
 sbx env exec -- test -s /home/agent/.config/opencode/AGENTS.md
 sbx env exec -- cat /home/agent/.config/opencode/AGENTS.md
-sbx env exec -- test -s /usr/share/sandbox/kit/opencode-server/opencode-server-context.md
 ```
 
-The `AGENTS.md` output must contain the kit index/reference for
-`opencode-server`, and the staged context must contain the server-mode,
-clone-only, commit, and host-pull instructions. This mechanism does not create a
-repository-root `AGENTS.md`.
+The `AGENTS.md` output must contain a kit index/reference for `provider-keys`,
+`dotnet`, `aspire`, `openspec`, and `opencode-server`. The staged contexts must
+contain the credential, SDK, Aspire, OpenSpec, and server/clone/Git-handoff
+guidance respectively. This mechanism does not create a repository-root
+`AGENTS.md`.
 
 If `anon` is not `401`, the server either did not start or has no password.
 Check that `..\zaiware-secrets\server-password` exists on the host and is

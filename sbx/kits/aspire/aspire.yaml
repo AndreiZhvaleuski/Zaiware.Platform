@@ -35,6 +35,12 @@ licenses: [MIT]
 
 kind: mixin
 
+capabilities:
+  # Focused agent guidance: HTTP profile, configured environment, safe commands.
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      contentFile: ./aspire-context.md
+
 # Declarative identity only; no `requires` (see the header comment).
 provides:
   - "aspire@${{ kit.args.aspireVersion }}"

@@ -30,6 +30,11 @@ licenses: [MIT]
 kind: mixin
 
 capabilities:
+  # Focused agent guidance: project artifacts and OpenSpec workflow skills.
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      contentFile: ./openspec-context.md
+
   - type: com.docker.sandbox/network-policy@1
     config:
       runtime:

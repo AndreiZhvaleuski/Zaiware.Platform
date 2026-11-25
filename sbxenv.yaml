@@ -54,10 +54,13 @@ additionalWorkspaces:
     readOnly: true
 
 kits:
+  # Each local kit contributes focused agent context through agent-context@1;
+  # opencode-server also owns OpenCode's global AGENTS.md profile.
   # The single workload supplies DinD, Compose, Buildx, Git, and common tools.
   # All agent and project-specific features come from the mixins below.
   - docker.io/sbx/shell:1.0.0
-  # Network access + credential injection. Adds no files to the image.
+  # Network access + credential injection. Adds no image files; its agent
+  # context explains the proxy-managed key.
   - ./sbx/kits/provider-keys
   # Adds the pinned OpenCode binary, starts the server at boot, keeps the
   # sandbox alive, persists OpenCode state across recreation, and injects the

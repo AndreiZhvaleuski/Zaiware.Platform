@@ -156,12 +156,27 @@ Hooks:
 | `lifecycle@1` | Processes that run on every boot | Set `user: "0"` explicitly when an install hook needs root. Startup hooks see the sandbox env in sbx. |
 | `long-running@1` | Keep the sandbox alive after the last client | Config-less; requires sbx v0.47+. |
 | `port@1` | A host-allocated port | Host chooses the port; omitted `family` is `ipv4`. Prefer explicit `ports:` in `sbxenv.yaml` for a stable port. A failed publish aborts creation. |
-| `agent-context@1` | Agent instructions | Applied at create. Documentation belongs in this file, not in agent context. |
+| `agent-context@1` | Agent instructions | Applied at create. Keep bodies minimal; documentation belongs in this file. |
 
 ### Agent context
 
-An ordinary tool mixin normally contributes only an instruction body. An agent
-mixin can also declare `filename` together with an explicit `directory`:
+Every local kit contributes one concise context file. Put only non-obvious,
+actionable information in it: paths, preconfigured settings, safe commands, and
+things the agent must not do. Installation details, version pins, rationale,
+network-rule inventories, and troubleshooting belong in `README.md` or this
+file, not in agent context.
+
+An ordinary tool mixin contributes only an instruction body:
+
+```yaml
+capabilities:
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      contentFile: ./tool-context.md
+```
+
+An agent mixin can also declare `filename` together with an explicit
+`directory`:
 
 ```yaml
 capabilities:
@@ -174,15 +189,19 @@ capabilities:
 
 OpenCode reads global instructions from
 `/home/agent/.config/opencode/AGENTS.md`; `opencode-server` is its agent mixin,
-so it declares that explicit destination. The frontend stages `contentFile`
-under `/usr/share/sandbox/kit/<kit>/` and adds a kit index entry pointing at the
-staged file. Do not copy the same file in the Dockerfile as well: the staged
-copy and the generated index are the capability's output.
+so it declares that explicit destination. The four ordinary tool kits
+(`provider-keys`, `dotnet`, `aspire`, `openspec`) use the body-only form.
+
+The frontend stages `contentFile` under `/usr/share/sandbox/kit/<kit>/` and adds
+a kit index entry pointing at the staged file. Do not copy the same file in the
+Dockerfile as well: the staged copy and the generated index are the capability's
+output.
 
 Agent context is applied at create time. `sbx env exec` and attaching to an
 existing sandbox do not apply it; recreate the sandbox and verify the generated
-`AGENTS.md` before recording evidence. Do not add an evidence-log entry until a
-full build/recreate and verification have actually passed.
+`AGENTS.md` and every staged kit context before recording evidence. Do not add
+an evidence-log entry until a full build/recreate and verification have actually
+passed.
 
 ## 7. Phases
 

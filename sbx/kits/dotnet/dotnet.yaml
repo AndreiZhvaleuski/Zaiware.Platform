@@ -43,6 +43,11 @@ provides:
   - "dotnet@${{ kit.args.sdkVersion }}"
 
 capabilities:
+  # Focused agent guidance: use the baked SDK and preconfigured DOTNET_ROOT.
+  - type: com.docker.sandbox/agent-context@1
+    config:
+      contentFile: ./dotnet-context.md
+
   - type: com.docker.sandbox/network-policy@1
     config:
       runtime:
