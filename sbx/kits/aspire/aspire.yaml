@@ -3,8 +3,8 @@
 #
 # Why baked and not a startup hook: a Kit layer is part of the image digest, so
 # every `sbx env rm` / `sbx env run` gets the same CLI with no download. The
-# version is pinned by `aspireVersion`; bump it together with the AppHost SDK
-# version in Zaiware.Platform.AppHost.csproj and Directory.Packages.props.
+# version is pinned by `aspireVersion`; bump it together with the Aspire
+# package versions in Zaiware.Platform.AppHost.csproj and Directory.Packages.props.
 #
 # The environment arguments fix two things an AppHost needs in this sandbox:
 #
@@ -69,7 +69,7 @@ args:
   aspireVersion:
     default: "17.0.0"
     pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
-    description: Exact Aspire CLI version to install; keep in sync with the AppHost SDK
+    description: Exact Aspire CLI version to install; keep in sync with the Aspire AppHost packages
     buildArg: ASPIRE_VERSION
 
   allowUnsecuredTransport:

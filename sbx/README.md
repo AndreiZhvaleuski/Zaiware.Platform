@@ -348,9 +348,9 @@ empty volume; export history from the old sandbox first if it matters.
 (`aspire.dev/install.sh`) and bakes it into the image. The script verifies the
 release archive's SHA-512; the version is pinned by `aspireVersion`.
 
-- Version: `aspireVersion` (default `13.6.4`) must track the AppHost SDK in
-  `Zaiware.Platform.AppHost.csproj` (`Aspire.AppHost.Sdk`) and the Aspire
-  packages in `Directory.Packages.props`. Bump them together.
+- Version: `aspireVersion` (default `17.0.0`) must track the Aspire package
+  versions in `Directory.Packages.props` and the `Aspire.Hosting.*` package
+  references in `Zaiware.Platform.AppHost.csproj`. Bump them together.
 - Layout: the CLI installs at the official default, `~/.aspire/bin/aspire`,
   and `/usr/local/bin/aspire` is a symlink. The installer writes
   `.aspire-install.json` next to the binary; for a script install the CLI keeps
