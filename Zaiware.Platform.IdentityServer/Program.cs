@@ -85,6 +85,10 @@ _ = builder.Services
 builder.Services.AddRazorPages();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(
+    builder.Configuration.GetSection(OtpSendRateLimitOptions.SectionName).Get<OtpSendRateLimitOptions>()
+    ?? new OtpSendRateLimitOptions());
+builder.Services.AddSingleton<IOtpSendRateLimiter, OtpSendRateLimiter>();
 builder.Services.AddSingleton<ISecondFactorStateCookie, SecondFactorStateCookie>();
 builder.Services.AddScoped<IUserSessionSignIn, UserSessionSignIn>();
 builder.Services.AddScoped<IFlashMessage, FlashMessage>();

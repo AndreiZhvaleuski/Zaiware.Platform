@@ -10,6 +10,7 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 public sealed class EnterOtpModel(
     IOtpAuthenticator otpAuthenticator,
     IOtpSender otpSender,
+    IOtpSendRateLimiter otpSendRateLimiter,
     IUserSessionSignIn userSession,
     IIdentityServerInteractionService interaction,
     ILogger<EnterOtpModel> logger) : PageModel
@@ -18,6 +19,13 @@ public sealed class EnterOtpModel(
     public InputModel Input { get; set; } = new();
 
     public string? Email { get; private set; }
+
+    /// <summary>
+    /// The original destination carried through code entry. It is read from TempData (and
+    /// refreshed from the query string when present) so "Change email" and resends do not
+    /// drop it before verification.
+    /// </summary>
+    public string? ReturnUrl { get; private set; }
 
     public DateTimeOffset? SendingBlockedUntilUtc { get; private set; }
 
@@ -37,7 +45,7 @@ public sealed class EnterOtpModel(
             ? digits[index]
             : string.Empty;
 
-    public IActionResult OnGet()
+    public IActionResult OnGet(string? returnUrl = null)
     {
         // A GUID-shaped TempData string deserializes as System.Guid, so read it as text rather
         // than assuming the cookie hands back a string.
@@ -49,11 +57,13 @@ public sealed class EnterOtpModel(
             return RedirectToPage("/Account/Login", new
             {
                 email = TempData["OtpEmail"]?.ToString(),
+                returnUrl = ResolveReturnUrl(returnUrl),
                 sessionExpired = true,
             });
         }
 
         Input.Token = token;
+        ResolveReturnUrl(returnUrl);
         PopulateFromTempData();
 
         return Page();
@@ -64,7 +74,12 @@ public sealed class EnterOtpModel(
         if (string.IsNullOrEmpty(Input.Token))
         {
             logger.LogWarning("EnterOtp requested without an active OTP session (browser cookie missing, blocked, or expired); redirecting to login.");
-            return RedirectToPage("/Account/Login", new { sessionExpired = true });
+            return RedirectToPage("/Account/Login", new
+            {
+                email = TempData["OtpEmail"]?.ToString(),
+                returnUrl = ResolveReturnUrl(null),
+                sessionExpired = true,
+            });
         }
 
         if (!OtpToken.TryCreate(Input.Token, out var token))
@@ -105,13 +120,12 @@ public sealed class EnterOtpModel(
             "otp",
             HttpContext.RequestAborted);
 
-        var returnUrl = SafeReturnUrl.Normalize(
-            TempData["ReturnUrl"]?.ToString(),
-            interaction,
-            Url);
+        var returnUrl = ReturnUrl
+            ?? SafeReturnUrl.Normalize(TempData["ReturnUrl"]?.ToString(), interaction, Url);
 
         TempData.Remove("OtpToken");
         TempData.Remove("OtpEmail");
+        TempData.Remove("ReturnUrl");
 
         return SafeReturnUrl.Redirect(this, returnUrl);
     }
@@ -123,21 +137,49 @@ public sealed class EnterOtpModel(
 
         if (string.IsNullOrEmpty(emailText) || string.IsNullOrEmpty(token))
         {
-            return RedirectToPage("/Account/Login", new { sessionExpired = true });
+            return RedirectToPage("/Account/Login", new
+            {
+                email = emailText,
+                returnUrl = ResolveReturnUrl(null),
+                sessionExpired = true,
+            });
         }
 
         // Defensive: Login stores the normalized form, but an older cookie may carry mixed case.
         var normalized = emailText.Trim().ToLowerInvariant();
+        var returnUrl = ResolveReturnUrl(null);
 
-        // Reading removes the value, so put both the address and the token back for the page
-        // that follows. Without re-adding the token, a blocked resend would end the OTP session.
+        // Reading removes the value, so put both the address, token, and destination back for
+        // the page that follows. Without re-adding the token, a blocked resend would end the
+        // OTP session.
         Email = normalized;
+        Input.Token = token;
         TempData["OtpEmail"] = normalized;
         TempData["OtpToken"] = token;
+        if (returnUrl is not null)
+        {
+            TempData["ReturnUrl"] = returnUrl;
+        }
+
+        SendingBlockedUntilUtc = ReadBlockedUntil(TempData["BlockedUntil"]);
+        TempData.Keep("BlockedUntil");
 
         if (!EmailAddress.TryCreate(normalized, out var email))
         {
-            return RedirectToPage("/Account/Login");
+            return RedirectToPage("/Account/Login", new { returnUrl });
+        }
+
+        var rateLimit = otpSendRateLimiter.TryAcquire(HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        if (!rateLimit.Allowed)
+        {
+            logger.LogWarning(
+                "OTP resend rate limit reached for client {ClientAddress}; retry after {RetryAfter}.",
+                HttpContext.Connection.RemoteIpAddress,
+                rateLimit.RetryAfter);
+
+            ResendNotice = IOtpSendRateLimiter.TooManyRequestsMessage;
+            return Page();
         }
 
         var result = await otpSender.TrySendOtpAsync(
@@ -178,6 +220,24 @@ public sealed class EnterOtpModel(
         TempData.Keep("OtpToken");
         TempData.Keep("OtpEmail");
         TempData.Keep("BlockedUntil");
+    }
+
+    private string? ResolveReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            returnUrl = TempData["ReturnUrl"]?.ToString();
+        }
+
+        ReturnUrl = SafeReturnUrl.Normalize(returnUrl, interaction, Url);
+
+        if (ReturnUrl is not null)
+        {
+            TempData["ReturnUrl"] = ReturnUrl;
+            TempData.Keep("ReturnUrl");
+        }
+
+        return ReturnUrl;
     }
 
     // DefaultTempDataSerializer type-sniffs on deserialize: a GUID-shaped string comes back as

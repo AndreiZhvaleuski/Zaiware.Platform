@@ -7,7 +7,7 @@
 }
 
 <div class="card">
-  <a class="back-link" asp-page="/Account/Login" asp-route-email="@Model.Email">&#8592; Change email</a>
+  <a class="back-link" asp-page="/Account/Login" asp-route-email="@Model.Email" asp-route-returnUrl="@Model.ReturnUrl">&#8592; Change email</a>
 
   <header class="card__header">
     <h1 id="title" class="card__title" tabindex="-1" data-autofocus-heading>Check your email</h1>
@@ -18,7 +18,8 @@
 
   <form id="otp-form" method="post" asp-page="/Account/EnterOtp" data-busy-form novalidate>
     <input type="hidden" asp-for="Input.Token">
-    <fieldset class="code-inputs code-inputs--8" data-code-group data-code-pattern="alnum" aria-describedby="otp-hint otp-error">
+    <fieldset class="code-inputs code-inputs--8" data-code-group data-code-pattern="alnum" aria-describedby="otp-hint otp-error"
+              aria-invalid="@(ViewData.ModelState["Input.Code"]?.Errors.Count > 0 ? "true" : "false")">
       <legend class="visually-hidden">One-time code, 8 characters</legend>
       @for (var index = 0; index < 8; index++)
       {

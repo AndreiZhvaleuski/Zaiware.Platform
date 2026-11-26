@@ -16,6 +16,7 @@ public sealed class LoginModel(
     IPasswordAuthenticator passwordAuthenticator,
     IUserAuthenticatorsSelfService authenticatorsSelfService,
     IOtpSender otpSender,
+    IOtpSendRateLimiter otpSendRateLimiter,
     ISecondFactorStateCookie secondFactorStateCookie,
     IUserSessionSignIn userSession,
     IIdentityServerInteractionService interaction,
@@ -46,10 +47,16 @@ public sealed class LoginModel(
     {
         SessionExpired = sessionExpired;
 
+        // The OTP entry page's "Change email" link returns here with the pending return URL
+        // in the query string. If a caller only carries the email (or a browser drops the
+        // query), fall back to the return URL still pending in TempData and keep it for the
+        // next send so the eventual sign-in resumes the original challenge.
+        var resolvedReturnUrl = ResolveReturnUrl(returnUrl);
+
         // A valid session skips the sign-in screen; honor the original destination when it is safe.
         if (User.Identity?.IsAuthenticated == true)
         {
-            return SafeReturnUrl.Redirect(this, GetSafeReturnUrl(returnUrl));
+            return SafeReturnUrl.Redirect(this, resolvedReturnUrl);
         }
 
         if (!string.IsNullOrWhiteSpace(email))
@@ -57,7 +64,7 @@ public sealed class LoginModel(
             Input.Email = email;
         }
 
-        Input.ReturnUrl = GetSafeReturnUrl(returnUrl);
+        Input.ReturnUrl = resolvedReturnUrl;
 
         return Page();
     }
@@ -161,7 +168,7 @@ public sealed class LoginModel(
     /// </summary>
     public async Task<IActionResult> OnPostSendCodeAsync()
     {
-        Input.ReturnUrl = GetSafeReturnUrl(Input.ReturnUrl);
+        Input.ReturnUrl = ResolveReturnUrl(Input.ReturnUrl);
 
         var normalizedInput = (Input.Email ?? string.Empty).Trim().ToLowerInvariant();
 
@@ -174,6 +181,23 @@ public sealed class LoginModel(
         }
 
         var normalized = email.Value;
+
+        // The per-address cooldown protects a single inbox; this second budget prevents one
+        // client from spraying codes to an unbounded number of addresses. Unknown and known
+        // addresses share the same response, so the limit cannot be used as an enumeration
+        // oracle. A denied request never reaches the sender.
+        var rateLimit = otpSendRateLimiter.TryAcquire(HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        if (!rateLimit.Allowed)
+        {
+            logger.LogWarning(
+                "OTP send rate limit reached for client {ClientAddress}; retry after {RetryAfter}.",
+                HttpContext.Connection.RemoteIpAddress,
+                rateLimit.RetryAfter);
+
+            ModelState.AddModelError(string.Empty, IOtpSendRateLimiter.TooManyRequestsMessage);
+            return Page();
+        }
 
         var result = await otpSender.TrySendOtpAsync(
             new OtpAddress(OtpChannel.Email, email),
@@ -202,6 +226,27 @@ public sealed class LoginModel(
                 ModelState.AddModelError(string.Empty, "Failed to send the code. Please try again.");
                 return Page();
         }
+    }
+
+    private string? ResolveReturnUrl(string? returnUrl)
+    {
+        // A pending value only fills in when the caller supplied nothing at all. A supplied
+        // but unsafe value must not silently inherit the old destination.
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            returnUrl = TempData["ReturnUrl"]?.ToString();
+        }
+
+        var normalized = GetSafeReturnUrl(returnUrl);
+
+        if (normalized is not null)
+        {
+            // Keep the pending destination for the following send/verification request.
+            TempData["ReturnUrl"] = normalized;
+            TempData.Keep("ReturnUrl");
+        }
+
+        return normalized;
     }
 
     private string? GetSafeReturnUrl(string? returnUrl) =>

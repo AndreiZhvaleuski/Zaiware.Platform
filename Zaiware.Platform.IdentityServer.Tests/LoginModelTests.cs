@@ -115,8 +115,39 @@ public sealed class LoginModelTests
         await userSession.DidNotReceiveWithAnyArgs().SignInAsync(default!, default!, default!, default);
     }
 
+    [Fact]
+    public async Task Rate_limited_otp_send_shows_a_generic_notice_and_never_calls_the_sender()
+    {
+        var limiter = Substitute.For<IOtpSendRateLimiter>();
+        limiter.TryAcquire(Arg.Any<string?>())
+            .Returns(OtpSendRateLimitResult.Denied(TimeSpan.FromMinutes(5)));
+        var (model, _, sender, _) = CreateModel(limiter);
+        model.Input.Email = "nobody@example.test";
+
+        var result = await model.OnPostSendCodeAsync();
+
+        Assert.IsType<PageResult>(result);
+        Assert.Contains(
+            model.ModelState[string.Empty]!.Errors,
+            error => error.ErrorMessage == IOtpSendRateLimiter.TooManyRequestsMessage);
+        await sender.DidNotReceiveWithAnyArgs().TrySendOtpAsync(default!, default);
+    }
+
+    [Fact]
+    public void Login_get_falls_back_to_the_pending_tempdata_return_url_and_keeps_it()
+    {
+        var (model, _, _, _) = CreateModel();
+        model.TempData["ReturnUrl"] = "/Account";
+
+        var result = model.OnGet(returnUrl: null);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Equal("/Account", model.Input.ReturnUrl);
+        Assert.Equal("/Account", model.TempData["ReturnUrl"]);
+    }
+
     private static (LoginModel Model, IPasswordAuthenticator Password, IOtpSender Sender, IUserSessionSignIn Session)
-        CreateModel()
+        CreateModel(IOtpSendRateLimiter? rateLimiter = null)
     {
         var context = new DefaultHttpContext();
         var actionContext = new ActionContext(context, new RouteData(), new PageActionDescriptor());
@@ -132,6 +163,9 @@ public sealed class LoginModelTests
             password,
             authenticators,
             sender,
+            rateLimiter ?? new OtpSendRateLimiter(
+                TimeProvider.System,
+                new OtpSendRateLimitOptions { PerClientLimit = 1000, GlobalLimit = 1000 }),
             stateCookie,
             session,
             interaction,

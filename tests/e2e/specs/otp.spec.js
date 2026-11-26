@@ -2,15 +2,14 @@
 
 const { test, expect } = require('@playwright/test');
 const { clearMailbox, latestOtpTo } = require('../support/mailpit');
-const { passwordUser, totpUser, demoUser, accountUser } = require('../support/identities');
+const { passwordUser, totpUser, demoUser, accountUser, passwordChangeUser } = require('../support/identities');
 
 test.setTimeout(120_000);
 
-async function requestCode(page, email) {
-  await clearMailbox();
-  await page.goto('/Account/Login');
-  await page.locator('#email').fill(email);
+async function submitEmailSend(page) {
+  const navigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
   await page.locator('#send-btn').click();
+  await navigation;
 
   const blocked = page.locator('.notice.notice--error, .field__error').filter({ hasText: 'Please wait' });
 
@@ -20,9 +19,18 @@ async function requestCode(page, email) {
     const text = await blocked.first().textContent();
     const seconds = Number((text.match(/wait (\d+) second/i) || [])[1] || 60);
     await page.waitForTimeout((seconds + 1) * 1000);
+    const retry = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
     await page.locator('#send-btn').click();
+    await retry;
   }
+}
 
+async function requestCode(page, email, returnUrl = null) {
+  await clearMailbox();
+  const query = returnUrl === null ? '' : `?returnUrl=${encodeURIComponent(returnUrl)}`;
+  await page.goto(`/Account/Login${query}`);
+  await page.locator('#email').fill(email);
+  await submitEmailSend(page);
   await expect(page).toHaveURL(/\/Account\/EnterOtp/);
 }
 
@@ -61,6 +69,7 @@ test.describe('one-time-code sign-in', () => {
   test('completes the round trip, honours the server cooldown, and accepts a pasted code', async ({ page }) => {
     await requestCode(page, passwordUser.email);
     await expect(page.locator('.otp__email')).toHaveText(passwordUser.email);
+    await expect(page.locator('#otp-form fieldset')).toHaveAttribute('aria-invalid', 'false');
 
     const blockedUntil = page.locator('#resend');
     await expect(blockedUntil).toBeDisabled();
@@ -106,15 +115,46 @@ test.describe('one-time-code sign-in', () => {
     await expect(page.locator('#account-email')).toHaveText(accountUser.email);
   });
 
-  test('drops a malicious return URL instead of redirecting off-site', async ({ page }) => {
-    await clearMailbox();
-    await page.goto('/Account/Login?returnUrl=https%3A%2F%2Fevil.example%2F');
-    await page.locator('#identifier').fill(passwordUser.username);
-    await page.locator('#password').fill(passwordUser.password);
-    await page.locator('#signin-btn').click();
+  test('drops a malicious return URL during OTP sign-in instead of redirecting off-site', async ({ page }) => {
+    await requestCode(page, passwordUser.email, 'https://evil.example/');
+
+    const code = await waitForOtp(passwordUser.email);
+    await submitCode(page, code);
 
     await expect(page).toHaveURL(/\/$/);
     expect(page.url()).not.toContain('evil.example');
+  });
+
+  test('keeps the pending return URL when changing the email address', async ({ page }) => {
+    const firstAddress = `first-${Date.now()}@zaiware.dev`;
+
+    // Start from a protected page so the login URL carries returnUrl=/Account.
+    await clearMailbox();
+    await page.goto('/Account');
+    await expect(page).toHaveURL(/\/Account\/Login\?[Rr]eturnUrl=%2FAccount/);
+
+    await page.locator('#email').fill(firstAddress);
+    await submitEmailSend(page);
+    await expect(page).toHaveURL(/\/Account\/EnterOtp/);
+
+    // "Change email" must carry the pending destination back to sign-in.
+    const backHref = await page.locator('.back-link').getAttribute('href');
+    expect(backHref).toContain('returnUrl=%2FAccount');
+    await page.locator('.back-link').click();
+    await expect(page).toHaveURL(/\/Account\/Login/);
+    await expect(page.locator('#email')).toHaveValue(firstAddress);
+    await expect(page.locator('#email-form input[name="Input.ReturnUrl"]')).toHaveValue('/Account');
+
+    // Send to a different account, verify, and land on the original /Account destination.
+    await page.locator('#email').fill(passwordChangeUser.email);
+    await submitEmailSend(page);
+    await expect(page).toHaveURL(/\/Account\/EnterOtp/);
+
+    const code = await waitForOtp(passwordChangeUser.email);
+    await submitCode(page, code);
+
+    await expect(page).toHaveURL(/\/Account$/);
+    await expect(page.locator('#account-email')).toHaveText(passwordChangeUser.email);
   });
 
   test('changes the address by returning to the combined sign-in screen', async ({ page }) => {
@@ -194,6 +234,7 @@ test.describe('one-time-code sign-in', () => {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await submitCode(page, wrong);
       await expect(page.locator('#otp-form')).toBeVisible();
+      await expect(page.locator('#otp-form fieldset')).toHaveAttribute('aria-invalid', 'true');
     }
 
     await submitCode(page, code);
