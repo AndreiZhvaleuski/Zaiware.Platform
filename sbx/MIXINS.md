@@ -361,6 +361,7 @@ the server port, hook, or database.
 | `5c49c03` | Minimal Aspire kit | Removed several variables at once; did not isolate `requires` |
 | `c7f33b6`, `182dc07`, `ed165c4` | Added bare `requires`, removed it, restored `provides` | `requires` remains unverified; `provides` is safe |
 | `ed17687`, `df855b4`, `b5e30b9` | OpenSpec kit iterations | Default path, no extra network policy, one owner per file path |
+| `86dae59`, `6cb1eb8` | Published `docker.io/sbx/playwright:1.61.1`; full recreation verification | Playwright `1.61.1` and `@playwright/test` resolve; `/opt/ms-playwright` is writable; localhost render produced an 8,684-byte PNG; contexts are staged/indexed; server auth is `200`/`401`; headed/codegen fail without a display; after removing the host `default-allow-all` rule, ungranted sites return `403` while the Playwright CDN and install repositories remain reachable |
 
 ## Related
 
