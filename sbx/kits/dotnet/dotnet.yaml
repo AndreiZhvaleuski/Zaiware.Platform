@@ -56,6 +56,12 @@ capabilities:
           # *.nuget.org; the single-label wildcard covers both.
           - api.nuget.org:443
           - "*.nuget.org:443"
+          # Duende MCP indexers: docs llms.txt, blog RSS, and GitHub sample archives.
+          # github.com is already granted by the openspec kit; codeload hosts the
+          # sample archives and is not covered by that kit's wildcard.
+          - docs.duendesoftware.com:443
+          - duendesoftware.com:443
+          - codeload.github.com:443
           # Only needed if the agent installs another SDK from inside the
           # sandbox. The baked install itself uses no egress.
           - aka.ms:443

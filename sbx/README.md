@@ -206,7 +206,9 @@ agent context.
 `/home/agent/.local/share/opencode`. That is where OpenCode keeps the session
 database, messages, logs, snapshots, and `auth.json`, so `sbx env rm` followed
 by a create reattaches the same data as long as the sandbox name stays
-`zaiware-platform`.
+`zaiware-platform`. The install hook also creates the agent-owned
+`duende-mcp/` subdirectory where the Duende Documentation MCP server keeps its
+persistent `mcp.db` index.
 
 - The volume is keyed by **sandbox name + kit source + volume path**, not by
   kit version. For a local source, moving `kits/opencode-server` or
@@ -249,9 +251,10 @@ gets the same toolchain with no network round trip.
   `HOME=/home/agent`, so the absolute paths in `dotnetup_manifest.json` stay
   valid after the overlay lands on the workload. `dotnetup list`, `update`, and
   `uninstall` work in the sandbox.
-- PATH: `/usr/local/bin/dotnet` links to the SDK muxer and
-  `/usr/local/bin/dotnetup` links to the manager; `/usr/local/bin` is already on
-  the sandbox `PATH`. No shell profile or startup hook is needed.
+- PATH: `/usr/local/bin/dotnet` links to the SDK muxer,
+  `/usr/local/bin/dotnetup` links to the manager, and `/usr/local/bin/dnx`
+  links to the .NET 10 tool runner; `/usr/local/bin` is already on the sandbox
+  `PATH`. No shell profile or startup hook is needed.
 - Writable state: `~/.dotnetup` must stay writable by uid 1000. dotnetup
   creates an activity lock there on every command, not only for updates.
 - `DOTNET_ROOT`: the mixin exports `/home/agent/.local/share/dotnetup/dotnet`.
@@ -266,9 +269,12 @@ gets the same toolchain with no network round trip.
   the .NET host aborts at startup without it (`Couldn't find a valid ICU
   package`). The Dockerfile copies only the ICU shared libraries from the build
   stage into the overlay; `libssl` and `zlib` come from the workload.
-- Egress: the mixin grants NuGet restore (`api.nuget.org`, `*.nuget.org`) and
-  the endpoints needed for an in-sandbox SDK install. Add another feed's host
-  there if the project uses one.
+- Egress: the mixin grants NuGet restore (`api.nuget.org`, `*.nuget.org`),
+  the endpoints needed for an in-sandbox SDK install, and the Duende MCP
+  indexers (`docs.duendesoftware.com`, `duendesoftware.com`, and
+  `codeload.github.com`). The composed OpenSpec kit already grants
+  `github.com` for sample-source links. Add another feed's host there if the
+  project uses one.
 
 The build downloads from `aka.ms` and `builds.dotnet.microsoft.com` on the
 host, so it needs host network access; the sandbox itself only needs the
@@ -279,8 +285,9 @@ Verify after the next sandbox creation:
 ```powershell
 sbx env exec -- dotnet --version
 sbx env exec -- dotnetup --version
+sbx env exec -- dnx --help
 sbx env exec -- dotnetup list
-sbx env exec -- bash -lc 'readlink /usr/local/bin/dotnet; readlink /usr/local/bin/dotnetup'
+sbx env exec -- bash -lc 'readlink /usr/local/bin/dotnet; readlink /usr/local/bin/dotnetup; readlink /usr/local/bin/dnx'
 sbx env exec -- bash -lc 'dotnet build Zaiware.Platform.slnx'
 ```
 

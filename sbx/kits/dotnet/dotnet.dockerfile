@@ -64,8 +64,10 @@ RUN mkdir -p /out/usr/local/bin /out/home/agent/.local/share \
  && rm -f /out/home/agent/.dotnetup/dotnetup.activity.lock \
  && test -x /out/home/agent/.dotnetup/dotnetup \
  && test -x /out/home/agent/.local/share/dotnetup/dotnet/dotnet \
+ && test -x /out/home/agent/.local/share/dotnetup/dotnet/dnx \
  && ln -s /home/agent/.dotnetup/dotnetup /out/usr/local/bin/dotnetup \
  && ln -s /home/agent/.local/share/dotnetup/dotnet/dotnet /out/usr/local/bin/dotnet \
+ && ln -s /home/agent/.local/share/dotnetup/dotnet/dnx /out/usr/local/bin/dnx \
  && chown -R 1000:1000 /out/home/agent
 
 # The overlay. Everything outside /out is the workload's, untouched.

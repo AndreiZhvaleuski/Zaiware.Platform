@@ -75,6 +75,9 @@ capabilities:
         - command: install -d -o agent -g agent -m 0755 /home/agent/.local/share/opencode
           user: "0"
           description: Make the OpenCode data volume writable by agent
+        - command: install -d -o agent -g agent -m 0755 /home/agent/.local/share/opencode/duende-mcp
+          user: "0"
+          description: Make the Duende MCP index directory writable by agent
         - command: mkdir -p /home/agent/.config/opencode && chown agent:agent /home/agent/.config /home/agent/.config/opencode
           user: "0"
           description: Make the OpenCode config directory writable by agent
