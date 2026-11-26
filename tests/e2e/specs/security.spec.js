@@ -2,7 +2,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { accountUser, securityUser, passwordChangeUser } = require('../support/identities');
-const { totp } = require('../support/totp');
+const { freshTotp } = require('../support/totp');
 const {
   signIn,
   signOut,
@@ -39,11 +39,13 @@ test.describe('account security', () => {
       await page.goto('/Account');
       await page.locator('#enable-totp-link').click();
       await expect(page).toHaveURL(/\/Account\/TotpSetup/);
+      await expect(page.locator('#totp-code')).toHaveAttribute('aria-describedby', /code-error/);
+      await expect(page.locator('#totp-code')).toHaveAttribute('aria-describedby', /setup-errors/);
 
       const secret = await readTotpSecret(page);
       expect(secret.length).toBeGreaterThanOrEqual(16);
 
-      await page.locator('#totp-code').fill(totp(secret));
+      await page.locator('#totp-code').fill(await freshTotp(secret));
       await page.locator('#totp-confirm-btn').click();
 
       const codesA = await readRecoveryCodes(page);
@@ -58,7 +60,9 @@ test.describe('account security', () => {
       await signOut(page);
       await signIn(page, user.email, user.password);
       // The enrollment step used the current window; use the next one to avoid replay rejection.
-      await completeTotpChallenge(page, totp(secret, 1));
+      // Enrollment already consumed the current step; use the server-tolerated next
+      // step so replay protection does not reject the challenge.
+      await completeTotpChallenge(page, await freshTotp(secret, 1));
       await expect(page.locator('#email-done')).toHaveText(user.email);
 
       // Regenerate: every code from the first set must stop working.
@@ -69,6 +73,8 @@ test.describe('account security', () => {
       await signOut(page);
       await signIn(page, user.email, user.password);
       await expect(page).toHaveURL(/\/Account\/TwoFactor/);
+      await expect(page.locator('#recovery-code')).toHaveAttribute('aria-describedby', /recovery-error/);
+      await expect(page.locator('#recovery-code')).toHaveAttribute('aria-describedby', /twofactor-error/);
 
       await enterRecoveryCode(page, codesA[0]);
       await expect(page).toHaveURL(/\/Account\/TwoFactor/);

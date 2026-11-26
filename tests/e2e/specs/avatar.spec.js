@@ -36,10 +36,21 @@ test.describe('avatars', () => {
 
     const src = await page.locator('.account-avatar__image').getAttribute('src');
     expect(src).toMatch(/^\/avatars\/[0-9a-f-]+/);
+    const subjectId = src.split('?')[0].split('/').pop();
 
     const response = await page.request.get(new URL(src, IDENTITY_BASE_URL).toString());
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']).toContain('image/png');
+
+    // The stable route redirects to a short-lived presigned URL for the subject's key.
+    const redirect = await page.request.get(new URL(src, IDENTITY_BASE_URL).toString(), {
+      maxRedirects: 0,
+    });
+    expect(redirect.status()).toBe(302);
+    const location = redirect.headers()['location'] || '';
+    expect(location).toContain(`/avatars/${subjectId}`);
+    expect(location).toContain('X-Amz-Signature=');
+    expect(location).toContain('X-Amz-Expires=300');
   });
 
   test('rejects an oversized upload without changing the avatar', async ({ page }) => {
@@ -58,6 +69,37 @@ test.describe('avatars', () => {
 
     await expect(page.locator('.notice--error')).toContainText('2 MB');
 
+    // Profile fields must remain populated on the error render path.
+    await expect(page.locator('#account-username')).toHaveValue(accountUser.username);
+    await expect(page.locator('#account-display-name')).toHaveValue('E2E Account');
+
+    const after = await page.locator('.account-avatar__image').getAttribute('src');
+    expect(after.split('?')[0]).toBe(before.split('?')[0]);
+    const afterBytes = await (await page.request.get(new URL(after, IDENTITY_BASE_URL).toString())).body();
+    expect(afterBytes.equals(beforeBytes)).toBe(true);
+  });
+
+  test('rejects a body over the request limit before buffering the whole upload', async ({ page }) => {
+    await signIn(page, accountUser.email, accountUser.password);
+    await page.goto('/Account');
+
+    const before = await page.locator('.account-avatar__image').getAttribute('src');
+    const beforeBytes = await (await page.request.get(new URL(before, IDENTITY_BASE_URL).toString())).body();
+
+    await page.locator('#Avatar').setInputFiles({
+      name: 'too-large.png',
+      mimeType: 'image/png',
+      buffer: Buffer.concat([PNG, Buffer.alloc(3 * 1024 * 1024)]),
+    });
+
+    const responsePromise = page.waitForResponse((response) =>
+      response.url().includes('/Account?handler=Avatar') && response.request().method() === 'POST');
+    await page.locator('#avatar-upload-btn').click();
+    const response = await responsePromise;
+
+    expect([400, 413]).toContain(response.status());
+
+    await page.goto('/Account');
     const after = await page.locator('.account-avatar__image').getAttribute('src');
     expect(after.split('?')[0]).toBe(before.split('?')[0]);
     const afterBytes = await (await page.request.get(new URL(after, IDENTITY_BASE_URL).toString())).body();

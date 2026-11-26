@@ -49,4 +49,37 @@ function totp(secret, offsetSteps = 0, now = Date.now()) {
   return String(binary % 1_000_000).padStart(6, '0');
 }
 
-module.exports = { totp, decodeBase32 };
+/**
+ * Waits until the current 30-second window has enough life left for a submit, then
+ * computes the code. This avoids the boundary race where the code is valid when typed
+ * but stale when the server verifies it.
+ */
+async function freshTotp(secret, offsetSteps = 0) {
+  const ageSeconds = (Date.now() % 30_000) / 1000;
+
+  if (ageSeconds > 20) {
+    await new Promise((resolve) => setTimeout(resolve, (30 - ageSeconds + 1) * 1000));
+  }
+
+  return totp(secret, offsetSteps);
+}
+
+/** Returns a six-digit code that is not in the server's current acceptance window. */
+function wrongTotp(secret, now = Date.now()) {
+  const accepted = new Set([
+    totp(secret, -1, now),
+    totp(secret, 0, now),
+    totp(secret, 1, now),
+  ]);
+
+  for (let value = 0; value < 1_000_000; value += 1) {
+    const candidate = String(value).padStart(6, '0');
+    if (!accepted.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error('Could not construct a wrong TOTP code.');
+}
+
+module.exports = { totp, freshTotp, wrongTotp, decodeBase32 };

@@ -18,25 +18,34 @@ test.describe('account profile', () => {
     await signIn(page, accountUser.email, accountUser.password);
     await page.goto('/Account');
 
-    await page.locator('#account-username').fill('e2e-account-renamed');
-    await page.locator('#account-display-name').fill('Renamed Account');
-    await page.locator('#profile-save-btn').click();
-    await expect(page.locator('.notice--success')).toContainText('Profile updated');
+    try {
+      await page.locator('#account-username').fill('e2e-account-renamed');
+      await page.locator('#account-display-name').fill('Renamed Account');
+      await page.locator('#profile-save-btn').click();
+      await expect(page.locator('.notice--success')).toContainText('Profile updated');
 
-    await page.reload();
-    await expect(page.locator('#account-username')).toHaveValue('e2e-account-renamed');
-    await expect(page.locator('#account-display-name')).toHaveValue('Renamed Account');
+      await page.reload();
+      await expect(page.locator('#account-username')).toHaveValue('e2e-account-renamed');
+      await expect(page.locator('#account-display-name')).toHaveValue('Renamed Account');
 
-    await signOut(page);
-    await signIn(page, 'e2e-account-renamed', accountUser.password);
-    await expect(page).toHaveURL(/\/$/);
-
-    // Restore the seeded values so the suite stays re-runnable.
-    await page.goto('/Account');
-    await page.locator('#account-username').fill(accountUser.username);
-    await page.locator('#account-display-name').fill('E2E Account');
-    await page.locator('#profile-save-btn').click();
-    await expect(page.locator('.notice--success')).toContainText('Profile updated');
+      await signOut(page);
+      await signIn(page, 'e2e-account-renamed', accountUser.password);
+      await expect(page).toHaveURL(/\/$/);
+    } finally {
+      // Restore the seeded values even when an assertion above failed, so later specs
+      // do not inherit the renamed identity.
+      try {
+        await page.goto('/Account');
+        if (await page.locator('#account-username').count() > 0) {
+          await page.locator('#account-username').fill(accountUser.username);
+          await page.locator('#account-display-name').fill('E2E Account');
+          await page.locator('#profile-save-btn').click();
+          await expect(page.locator('.notice--success')).toContainText('Profile updated');
+        }
+      } catch {
+        // The seed repairs usernames and display names on the next app start.
+      }
+    }
   });
 
   test('rejects a duplicate username and keeps the existing one', async ({ page }) => {
@@ -62,7 +71,13 @@ test.describe('account profile', () => {
     await page.locator('#confirm-password').fill('short');
     await page.locator('#password-save-btn').click();
 
-    await expect(page.locator('.notice--error')).toContainText(/15|password/i);
+    await expect(page.locator('.notice--error')).toContainText(/15/);
+
+    // The profile form must not be blank after a failed security action.
+    await expect(page.locator('#account-username')).toHaveValue(passwordUser.username);
+    await expect(page.locator('#account-display-name')).toHaveValue('E2E Password');
+    await expect(page.locator('#new-password')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#new-password')).toHaveAttribute('aria-describedby', /security-errors/);
 
     await signOut(page);
     await signIn(page, passwordUser.email, passwordUser.password);

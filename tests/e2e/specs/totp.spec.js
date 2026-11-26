@@ -2,7 +2,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { totpUser } = require('../support/identities');
-const { totp } = require('../support/totp');
+const { freshTotp, wrongTotp } = require('../support/totp');
 
 async function signInToChallenge(page, account) {
   await page.goto('/Account/Login');
@@ -25,8 +25,14 @@ test.describe('TOTP second factor', () => {
     await signInToChallenge(page, totpUser);
     await expect(page.locator('#title')).toHaveText('Two-step verification');
 
-    // Compute the code for the current window; allow a one-step clock skew.
-    await enterTotp(page, totp(totpUser.secret));
+    await enterTotp(page, await freshTotp(totpUser.secret));
+    await page.waitForTimeout(1200);
+
+    // Retry once with a fresh code if the first submit landed on a window boundary.
+    if (!page.url().endsWith('/')) {
+      await expect(page).toHaveURL(/\/Account\/TwoFactor/);
+      await enterTotp(page, await freshTotp(totpUser.secret));
+    }
 
     await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
     await expect(page.locator('#email-done')).toHaveText(totpUser.email);
@@ -34,7 +40,7 @@ test.describe('TOTP second factor', () => {
 
   test('rejects a wrong authenticator code without establishing a session', async ({ page }) => {
     await signInToChallenge(page, totpUser);
-    await enterTotp(page, '000000');
+    await enterTotp(page, wrongTotp(totpUser.secret));
 
     await expect(page).toHaveURL(/\/Account\/TwoFactor/);
     await expect(page.locator('.notice.notice--error')).toContainText("That code isn't valid");

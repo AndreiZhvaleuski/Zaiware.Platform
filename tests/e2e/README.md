@@ -1,9 +1,10 @@
 # End-to-end tests
 
-Playwright tests for the identity server, the account area, and avatar storage.
+Playwright tests for the identity server, the account area, TOTP, and avatar storage.
+The sandbox provides `@playwright/test` 1.61.1 and Chromium; nothing has to be installed,
+and `npx` is not on PATH there — use the `playwright` executable.
 
-The sandbox provides `@playwright/test` 1.61.1 and Chromium; nothing has to be installed.
-Run against a running identity server (the Aspire AppHost or `dotnet run`):
+## Running against a running stack
 
 ```bash
 cd tests/e2e
@@ -14,14 +15,50 @@ MAILPIT_BASE_URL=http://localhost:8025 \
 playwright test
 ```
 
-The suite is single-worker and has no retries. The Development seed supplies the identities;
-passwords, usernames, and the fixed TOTP secret can be overridden with the `E2E_*` environment
-variables read by `support/identities.js`.
+The suite is single-worker with no retries. It expects a freshly seeded Development
+database (the Aspire AppHost, or the native stack described below). Passwords, usernames,
+and the fixed TOTP secret can be overridden with the `E2E_*` environment variables read by
+`support/identities.js`.
 
-Notes:
-- The identity server must be served over HTTPS so `__Host-` cookies work.
-- OTP resend has a fixed one-minute server window; `otp.spec.js` waits it out when a previous
-  run left a cooldown.
-- Security tests clean up after themselves; a failed run can leave TOTP or a password changed.
-  Restarting the Development app re-applies the seed (passwords/usernames, and TOTP is removed
-  for identities without a configured secret).
+## Required services and environment
+
+The IdentityServer reads these configuration values (environment-variable form shown):
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+export ConnectionStrings__IdentityServer='Host=localhost;Port=5432;Database=zaiware-platform-identity-server;Username=postgres'
+export ConnectionStrings__Avatars='Endpoint=http://localhost:9000;AccessKey=rustfsadmin;SecretKey=rustfsadmin;Bucket=avatars'
+export Avatars__PublicEndpoint='http://localhost:9000'   # browser-visible RustFS endpoint
+export DATA_PROTECTION__APPLICATION_NAME='Zaiware.Platform.IdentityServer'
+export DATA_PROTECTION__KEYS_STORE_DIRECTORY='/tmp/dpkeys'
+```
+
+- PostgreSQL 17 on `5432` (the database is created by the Aspire resource; the native
+  stack uses the same name).
+- Mailpit with SMTP on `1025` and HTTP on `8025`; `MAILPIT_BASE_URL` defaults to
+  `http://localhost:8025`. These fixed development ports are a deliberate dev limitation.
+- RustFS S3 on `9000`. The `avatars` bucket must exist (Aspire's `AddBucket` provisions it;
+  the native stack must create it once). The public presigned URL uses
+  `Avatars:PublicEndpoint`/`AVATARS__PUBLICENDPOINT`; the S3 host port stays pinned to 9000
+  so the local default `http://localhost:9000` is stable.
+- HTTPS is mandatory for second-factor sign-in: `__Host-SecondFactorState` has no HTTP
+  fallback. Run with the `SelfHost` launch profile (`https://localhost:5001`) or any HTTPS
+  endpoint.
+
+Start the IdentityServer directly with:
+
+```bash
+dotnet run --project Zaiware.Platform.IdentityServer --launch-profile SelfHost
+```
+
+## Test data and cleanup
+
+The Development seed supplies the identities. E2E identities have `ResetPassword: true`,
+so a restart restores their configured password, username, and display name. A configured
+TOTP secret is reconciled on restart: the seed verifies the current code and rebuilds the
+device when the secret changed. The demo user's password is not overwritten after a
+manual change.
+
+Mutating specs restore their state in `try/finally`; a failed run is repaired by the next
+app start. OTP resend has a fixed one-minute server window; `otp.spec.js` waits it out when
+a previous run left a cooldown. Playwright reports and `test-results/` are ignored.
