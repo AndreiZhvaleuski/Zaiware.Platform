@@ -3,6 +3,11 @@
 const { test, expect } = require('@playwright/test');
 const { accountUser, passwordUser } = require('../support/identities');
 const { signIn } = require('../support/flows');
+const {
+  expectStatusBanner,
+  expectStatusRemoved,
+  submitAndReadLocation,
+} = require('../support/status');
 
 const IDENTITY_BASE_URL = process.env.IDENTITY_BASE_URL || 'https://localhost:5001';
 // A genuinely valid 16x16 RGBA PNG (quadrant pattern) generated with zlib/CRC32 and
@@ -67,8 +72,15 @@ test.describe('avatars', () => {
       mimeType: 'image/png',
       buffer: PNG,
     });
-    await page.locator('#avatar-upload-btn').click();
-    await expect(page.locator('.notice--success')).toContainText('Avatar updated');
+
+    const statusLocation = await submitAndReadLocation(
+      page,
+      () => page.locator('#avatar-upload-btn').click(),
+      '/Account?handler=Avatar');
+
+    expect(statusLocation).toContain('status=AvatarUpdated');
+    await expectStatusBanner(page, 'Avatar updated.');
+    await expectStatusRemoved(page);
 
     const src = await page.locator('.account-avatar__image').getAttribute('src');
     expect(src).toMatch(/^\/avatars\/[0-9a-f-]+/);

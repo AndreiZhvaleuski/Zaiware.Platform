@@ -26,7 +26,6 @@ public sealed class AccountModel(
     IUserAuthenticatorsSelfService authenticatorsSelfService,
     IAvatarStorage avatarStorage,
     IUserSessionSignIn userSession,
-    IFlashMessage flashMessage,
     ILogger<AccountModel> logger) : PageModel
 {
     private static readonly AttributeCode EmailCode = AttributeCode.Create("email");
@@ -86,7 +85,7 @@ public sealed class AccountModel(
         public string DisplayName { get; set; } = string.Empty;
     }
 
-    public async Task<IActionResult> OnGetAsync()
+    public async Task<IActionResult> OnGetAsync([FromQuery] string? status = null)
     {
         var subjectId = GetSubjectId();
 
@@ -103,7 +102,13 @@ public sealed class AccountModel(
         }
 
         Load(profile);
-        SuccessMessage = flashMessage.ConsumeSuccess();
+
+        if (AccountStatusExtensions.TryParse(status, out var accountStatus)
+            && AccountStatusExtensions.TryGetMessage(accountStatus, out var message))
+        {
+            SuccessMessage = message;
+        }
+
         await LoadAuthenticatorStateAsync(subjectId, HttpContext.RequestAborted);
 
         return Page();
@@ -175,8 +180,7 @@ public sealed class AccountModel(
 
         await userSession.SignInAsync(HttpContext, subjectId, CurrentAuthenticationMethod(), HttpContext.RequestAborted);
 
-        flashMessage.SetSuccess("Profile updated.");
-        return RedirectToPage();
+        return RedirectToPage(new { status = AccountStatus.ProfileUpdated.ToString() });
     }
 
     /// <summary>
@@ -257,8 +261,7 @@ public sealed class AccountModel(
             return Page();
         }
 
-        flashMessage.SetSuccess("Avatar updated.");
-        return RedirectToPage();
+        return RedirectToPage(new { status = AccountStatus.AvatarUpdated.ToString() });
     }
 
     /// <summary>
@@ -334,23 +337,19 @@ public sealed class AccountModel(
                 return Page();
             }
 
-            flashMessage.SetSuccess("Password changed.");
+            return RedirectToPage(new { status = AccountStatus.PasswordChanged.ToString() });
         }
-        else
+
+        if (!await authenticatorsSelfService.TrySetPasswordAsync(
+                subjectId,
+                success.Password,
+                HttpContext.RequestAborted))
         {
-            if (!await authenticatorsSelfService.TrySetPasswordAsync(
-                    subjectId,
-                    success.Password,
-                    HttpContext.RequestAborted))
-            {
-                ErrorMessages.Add("The password could not be set. Please try again.");
-                return Page();
-            }
-
-            flashMessage.SetSuccess("Password set.");
+            ErrorMessages.Add("The password could not be set. Please try again.");
+            return Page();
         }
 
-        return RedirectToPage();
+        return RedirectToPage(new { status = AccountStatus.PasswordSet.ToString() });
     }
 
     /// <summary>Removes every enrolled TOTP device, disabling the second factor.</summary>
@@ -383,8 +382,7 @@ public sealed class AccountModel(
             }
         }
 
-        flashMessage.SetSuccess("Two-factor authentication disabled.");
-        return RedirectToPage();
+        return RedirectToPage(new { status = AccountStatus.TwoFactorDisabled.ToString() });
     }
 
     /// <summary>

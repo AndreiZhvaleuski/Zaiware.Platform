@@ -24,7 +24,6 @@ public sealed class AccountModelTests
         var profileSelfService = Substitute.For<IUserProfileSelfService>();
         var profiles = Substitute.For<IUserProfileAdmin>();
         var authenticators = Substitute.For<IUserAuthenticatorsSelfService>();
-        var flash = Substitute.For<IFlashMessage>();
         var session = Substitute.For<IUserSessionSignIn>();
 
         profileSelfService.TryGetAsync(subjectId, Arg.Any<CancellationToken>())
@@ -39,18 +38,71 @@ public sealed class AccountModelTests
                 Arg.Any<CancellationToken>())
             .Returns(true);
 
-        var model = CreateModel(subjectId, profileSelfService, profiles, authenticators, session, flash);
+        var model = CreateModel(subjectId, profileSelfService, profiles, authenticators, session);
         model.Security.NewPassword = "New-Password-2026!";
         model.Security.ConfirmPassword = "New-Password-2026!";
 
         var result = await model.OnPostPasswordAsync();
 
-        Assert.IsType<RedirectToPageResult>(result);
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal("PasswordSet", redirect.RouteValues?["status"]);
         await authenticators.Received(1).TrySetPasswordAsync(
             subjectId,
             Arg.Any<ValidatedPlainTextPassword>(),
             Arg.Any<CancellationToken>());
-        flash.Received(1).SetSuccess("Password set.");
+    }
+
+    [Theory]
+    [InlineData("ProfileUpdated", "Profile updated.")]
+    [InlineData("profileupdated", "Profile updated.")]
+    public async Task A_known_status_query_renders_its_message(string value, string expected)
+    {
+        var subjectId = UserSubjectId.New();
+        var profileSelfService = Substitute.For<IUserProfileSelfService>();
+        profileSelfService.TryGetAsync(subjectId, Arg.Any<CancellationToken>())
+            .Returns(Fakes.CreateProfile(subjectId));
+        var authenticators = Substitute.For<IUserAuthenticatorsSelfService>();
+        authenticators.TryGetAsync(subjectId, Arg.Any<CancellationToken>())
+            .Returns(Fakes.CreateAuthenticators(subjectId));
+
+        var model = CreateModel(
+            subjectId,
+            profileSelfService,
+            Substitute.For<IUserProfileAdmin>(),
+            authenticators,
+            Substitute.For<IUserSessionSignIn>());
+
+        var result = await model.OnGetAsync(value);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Equal(expected, model.SuccessMessage);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("unknown")]
+    public async Task A_missing_or_unknown_status_query_renders_no_message(string? value)
+    {
+        var subjectId = UserSubjectId.New();
+        var profileSelfService = Substitute.For<IUserProfileSelfService>();
+        profileSelfService.TryGetAsync(subjectId, Arg.Any<CancellationToken>())
+            .Returns(Fakes.CreateProfile(subjectId));
+        var authenticators = Substitute.For<IUserAuthenticatorsSelfService>();
+        authenticators.TryGetAsync(subjectId, Arg.Any<CancellationToken>())
+            .Returns(Fakes.CreateAuthenticators(subjectId));
+
+        var model = CreateModel(
+            subjectId,
+            profileSelfService,
+            Substitute.For<IUserProfileAdmin>(),
+            authenticators,
+            Substitute.For<IUserSessionSignIn>());
+
+        var result = await model.OnGetAsync(value);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Null(model.SuccessMessage);
     }
 
     private static AccountModel CreateModel(
@@ -58,8 +110,7 @@ public sealed class AccountModelTests
         IUserProfileSelfService profileSelfService,
         IUserProfileAdmin profiles,
         IUserAuthenticatorsSelfService authenticators,
-        IUserSessionSignIn session,
-        IFlashMessage flash)
+        IUserSessionSignIn session)
     {
         var context = new DefaultHttpContext
         {
@@ -75,7 +126,6 @@ public sealed class AccountModelTests
             authenticators,
             Substitute.For<IAvatarStorage>(),
             session,
-            flash,
             NullLogger<AccountModel>.Instance)
         {
             PageContext = new PageContext(actionContext),

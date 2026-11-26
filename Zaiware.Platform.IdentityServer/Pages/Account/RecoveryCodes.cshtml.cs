@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Zaiware.Platform.IdentityServer;
 
 namespace Zaiware.Platform.IdentityServer.Pages.Account;
 
@@ -10,7 +9,7 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 /// TempData so a refresh or a later visit cannot reveal them again.
 /// </summary>
 [Authorize]
-public sealed class RecoveryCodesModel(IFlashMessage flashMessage) : PageModel
+public sealed class RecoveryCodesModel : PageModel
 {
     public string[] Codes { get; private set; } = [];
 
@@ -30,7 +29,9 @@ public sealed class RecoveryCodesModel(IFlashMessage flashMessage) : PageModel
     {
         // Neutral text: this page is reached both after first enrollment and after
         // regeneration, so claiming "enabled" would be wrong for the latter.
-        flashMessage.SetSuccess("Recovery codes saved.", "/Account");
-        return RedirectToPage("/Account/Account");
+        return RedirectToPage("/Account/Account", new
+        {
+            status = AccountStatus.RecoveryCodesSaved.ToString(),
+        });
     }
 }

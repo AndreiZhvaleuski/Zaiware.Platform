@@ -30,6 +30,13 @@ public sealed class DevelopmentSeedUser
     public string Password { get; init; } = string.Empty;
 
     /// <summary>
+    /// When true, the identity is seeded without a password so the E2E suite can exercise the
+    /// first-password ("set") flow. A password created through the account page is left in place
+    /// on restart; the test adapts to the already-set state on repeat runs.
+    /// </summary>
+    public bool WithoutPassword { get; init; }
+
+    /// <summary>
     /// When true, a restart resets an existing password to <see cref="Password"/>. Only the
     /// disposable E2E identities opt in; general Development users keep a password they
     /// changed through the account page.
@@ -93,7 +100,7 @@ public static class DevelopmentUserSeed
         var normalizedEmail = NormalizeEmail(configured.Email);
         var username = NormalizeUsername(configured.Username);
 
-        if (string.IsNullOrWhiteSpace(configured.Password))
+        if (!configured.WithoutPassword && string.IsNullOrWhiteSpace(configured.Password))
         {
             throw new InvalidOperationException(
                 $"Development seed user '{normalizedEmail}' has no password configured.");
@@ -147,14 +154,19 @@ public static class DevelopmentUserSeed
         }
 
         await EnsureAuthenticatorsAsync(authenticatorsAdmin, subjectId, normalizedEmail, ct);
-        await EnsurePasswordAsync(
-            authenticatorsSelfService,
-            subjectId,
-            configured.Password,
-            normalizedEmail,
-            isNewUser,
-            configured.ResetPassword,
-            ct);
+
+        if (!configured.WithoutPassword)
+        {
+            await EnsurePasswordAsync(
+                authenticatorsSelfService,
+                subjectId,
+                configured.Password,
+                normalizedEmail,
+                isNewUser,
+                configured.ResetPassword,
+                ct);
+        }
+
         await EnsureTotpAsync(
             authenticatorsSelfService,
             services.GetRequiredService<ITotpAuthenticator>(),

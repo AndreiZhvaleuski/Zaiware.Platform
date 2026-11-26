@@ -91,7 +91,6 @@ builder.Services.AddSingleton(
 builder.Services.AddSingleton<IOtpSendRateLimiter, OtpSendRateLimiter>();
 builder.Services.AddSingleton<ISecondFactorStateCookie, SecondFactorStateCookie>();
 builder.Services.AddScoped<IUserSessionSignIn, UserSessionSignIn>();
-builder.Services.AddScoped<IFlashMessage, FlashMessage>();
 
 var app = builder.Build();
 

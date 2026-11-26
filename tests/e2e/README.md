@@ -61,14 +61,29 @@ Start the IdentityServer directly with:
 dotnet run --project Zaiware.Platform.IdentityServer --launch-profile SelfHost
 ```
 
+## Success status flags
+
+Account actions redirect with a short enum name in the query string (for example
+`/Account?status=ProfileUpdated`), never with message text or PII. The Account page maps the
+enum to the success banner; unknown values render no banner. With JavaScript, `ui.js` removes
+the `status` parameter after rendering (preserving other parameters and the hash), so a
+refresh does not repeat the banner. Without JavaScript the banner still renders but the
+parameter remains and a refresh repeats it; `status.spec.js` documents and asserts this
+trade-off. Because the flag belongs to the redirect request, one tab's save never shows a
+banner in another tab.
+
 ## Test data and cleanup
 
 The Development seed supplies the identities. E2E identities have `ResetPassword: true`,
 so a restart restores their configured password, username, and display name. A configured
 TOTP secret is reconciled on restart: the seed verifies the current code and rebuilds the
 device when the secret changed. The demo user's password is not overwritten after a
-manual change.
+manual change. `e2e-password-set` is seeded with `WithoutPassword: true` so the first run
+can exercise the set-password flow over OTP sign-in; after that run the account has a
+password, and repeat runs against the same stack exercise the change flow instead (the seed
+never removes an existing password).
 
 Mutating specs restore their state in `try/finally`; a failed run is repaired by the next
-app start. OTP resend has a fixed one-minute server window; `otp.spec.js` waits it out when
-a previous run left a cooldown. Playwright reports and `test-results/` are ignored.
+app start. The password-set identity is the exception described above. OTP resend has a
+fixed one-minute server window; `otp.spec.js` waits it out when a previous run left a
+cooldown. Playwright reports and `test-results/` are ignored.

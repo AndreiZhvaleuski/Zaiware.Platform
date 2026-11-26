@@ -31,6 +31,7 @@
 
 - [x] 6.1 Build the Account page profile section: username (uniqueness errors), display name, read-only email, and avatar upload with preview; re-sign the user after profile updates so claims reflect the new values. Write E2E specs: a username change becomes usable at sign-in, a duplicate username is rejected, the display name persists after reload, and the avatar preview renders in Chromium (`naturalWidth > 0`, no CSP error) after upload. Verify the specs pass headless.
 - [x] 6.2 Build the Account security section: password set/change via `TryValidatePasswordAsync` + `TryChangePasswordAsync` (policy errors surfaced) and TOTP enrollment per the documented sequence — `PlainBytesTotpKey.New()`, QR as an SVG or PNG data URI via QRCoder plus the manual key, confirmation via `TryAddTotpDeviceAsync`, recovery codes displayed exactly once — plus disable (remove devices) and regeneration. Write E2E specs covering the full matrix: enroll → sign out → password sign-in presents the challenge → complete; abandon enrollment before confirming → no challenge; disable → no challenge; regenerate → old codes invalid; password change takes effect and the old password fails. Verify the specs pass headless.
+- [x] 6.3 Replace TempData success flashes with enum status flags: add `Pages/Account/AccountStatus.cs` (enum + `TryParse`/`TryGetMessage`), redirect with `status=<EnumName>` from profile, avatar, password change/set, TOTP disable/already-enabled, and recovery-codes-saved, parse it once in the Account GET handler, and keep a missing/unknown value banner-free. Remove `IFlashMessage`/`FlashMessage` and their DI/test references. In `ui.js`, strip `status` after render with `URL` + `history.replaceState` while preserving other parameters and the hash. Verify: unit tests cover every message, case-insensitive parsing, null/empty/unknown values, and the `Enum.IsDefined` guard; E2E asserts the redirect flag, banner, URL cleanup, reload without a banner, two-tab isolation, unknown flags, and the no-JS repeat behavior (banner renders, parameter remains).
 
 ## 7. End-to-end verification
 
@@ -38,5 +39,6 @@
 
 ## Workflow follow-up
 
+- After merging, recreate the sandbox environment (`sbx env rm` / `sbx env create`) so the updated Aspire kit (17.0.0 CLI + registry allow-list) takes effect. Tasks 1.1, 5.1, and 7.1 stay unchecked until `aspire run` can be verified after that recreate.
 - Archive this change after the implementation is reviewed and the end-to-end suite passes.
 - Verify the archived specs (`otp-login`, `password-totp-login`, `user-account`, `avatar-storage`, `ui-foundations`) appear under `openspec/specs/`.

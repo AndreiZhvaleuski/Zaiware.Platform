@@ -21,8 +21,7 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 [Authorize]
 public sealed class TotpSetupModel(
     IUserAuthenticatorsSelfService authenticators,
-    IUserProfileSelfService profiles,
-    IFlashMessage flashMessage) : PageModel
+    IUserProfileSelfService profiles) : PageModel
 {
     private static readonly AttributeCode EmailCode = AttributeCode.Create("email");
 
@@ -50,8 +49,10 @@ public sealed class TotpSetupModel(
 
         if (existing?.TotpDeviceNames.Count > 0)
         {
-            flashMessage.SetSuccess("Two-factor authentication is already enabled.", "/Account");
-            return RedirectToPage("/Account/Account");
+            return RedirectToPage("/Account/Account", new
+            {
+                status = AccountStatus.TwoFactorAlreadyEnabled.ToString(),
+            });
         }
 
         var key = PlainBytesTotpKey.New();

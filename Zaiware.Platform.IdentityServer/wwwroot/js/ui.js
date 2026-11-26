@@ -311,5 +311,31 @@
         announce(text);
       }
     });
+
+    // The status flag is a one-shot success notice: after the banner has rendered and been
+    // announced, drop it from the address bar so a refresh does not repeat the message.
+    // Other query parameters and the hash are preserved. Without JavaScript the parameter
+    // stays and a refresh shows the banner again (documented progressive-enhancement cost).
+    clearStatusParameter();
   });
+
+  function clearStatusParameter() {
+    if (typeof window.URL !== 'function' || typeof window.history.replaceState !== 'function') {
+      return;
+    }
+
+    var url = new URL(window.location.href);
+
+    if (!url.searchParams.has('status')) {
+      return;
+    }
+
+    url.searchParams.delete('status');
+    var query = url.searchParams.toString();
+
+    window.history.replaceState(
+      window.history.state,
+      '',
+      url.pathname + (query ? '?' + query : '') + url.hash);
+  }
 })();

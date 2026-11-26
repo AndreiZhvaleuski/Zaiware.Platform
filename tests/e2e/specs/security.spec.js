@@ -10,14 +10,27 @@ const {
   enterRecoveryCode,
   enterTotp,
 } = require('../support/flows');
+const {
+  expectStatusBanner,
+  expectStatusRemoved,
+  submitAndReadLocation,
+} = require('../support/status');
 
 async function readRecoveryCodes(page) {
   await expect(page).toHaveURL(/\/Account\/RecoveryCodes/);
   const codes = await page.locator('.recovery-codes__list code').allTextContents();
 
   expect(codes.length).toBeGreaterThan(0);
-  await page.locator('#recovery-done-btn').click();
-  await expect(page).toHaveURL(/\/Account$/);
+
+  const statusLocation = await submitAndReadLocation(
+    page,
+    () => page.locator('#recovery-done-btn').click(),
+    '/Account/RecoveryCodes');
+
+  expect(statusLocation).toContain('status=RecoveryCodesSaved');
+  await expect(page).toHaveURL(/\/Account(\?status=[A-Za-z]+)?$/);
+  await expectStatusBanner(page, 'Recovery codes saved.');
+  await expectStatusRemoved(page);
 
   return codes;
 }
@@ -55,6 +68,16 @@ test.describe('account security', () => {
       currentRecoveryCodes = codesA;
       await expect(page.locator('#totp-status')).toContainText('Enabled');
       await expect(page.locator('#recovery-count')).toHaveText(String(codesA.length));
+
+      // While enrolled, visiting setup again reports the already-enabled outcome once.
+      const setupLocation = await submitAndReadLocation(
+        page,
+        () => page.goto('/Account/TotpSetup'),
+        '/Account/TotpSetup',
+        'GET');
+      expect(setupLocation).toContain('status=TwoFactorAlreadyEnabled');
+      await expectStatusBanner(page, 'Two-factor authentication is already enabled.');
+      await expectStatusRemoved(page);
 
       // The codes are shown exactly once; a later visit returns to the account page.
       await page.goto('/Account/RecoveryCodes');
@@ -102,8 +125,13 @@ test.describe('account security', () => {
 
       // Disable: the next password sign-in must not challenge.
       await page.goto('/Account');
-      await page.locator('#disable-totp-btn').click();
-      await expect(page.locator('.notice--success')).toContainText('disabled');
+      const disableLocation = await submitAndReadLocation(
+        page,
+        () => page.locator('#disable-totp-btn').click(),
+        '/Account?handler=DisableTotp');
+      expect(disableLocation).toContain('status=TwoFactorDisabled');
+      await expectStatusBanner(page, 'Two-factor authentication disabled.');
+      await expectStatusRemoved(page);
 
       await signOut(page);
       await signIn(page, user.email, user.password);
@@ -208,8 +236,14 @@ test.describe('account security', () => {
       await page.locator('#current-password').fill(currentPassword);
       await page.locator('#new-password').fill(nextPassword);
       await page.locator('#confirm-password').fill(nextPassword);
-      await page.locator('#password-save-btn').click();
-      await expect(page.locator('.notice--success')).toContainText('Password changed');
+
+      const location = await submitAndReadLocation(
+        page,
+        () => page.locator('#password-save-btn').click(),
+        '/Account?handler=Password');
+      expect(location).toContain('status=PasswordChanged');
+      await expectStatusBanner(page, 'Password changed.');
+      await expectStatusRemoved(page);
 
       await signOut(page);
       await signIn(page, user.email, nextPassword);

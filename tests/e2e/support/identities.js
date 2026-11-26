@@ -32,4 +32,11 @@ module.exports = {
     email: process.env.E2E_PASSWORD_CHANGE_EMAIL || 'e2e-password-change@zaiware.dev',
     password: process.env.E2E_PASSWORD_CHANGE_PASSWORD || 'E2e-Password-Change-2026!',
   },
+  passwordSetUser: {
+    username: process.env.E2E_PASSWORD_SET_USERNAME || 'e2e-password-set',
+    email: process.env.E2E_PASSWORD_SET_EMAIL || 'e2e-password-set@zaiware.dev',
+    // The first run sets a password through the account page; later runs on the same stack
+    // exercise the change flow with this value instead.
+    password: process.env.E2E_PASSWORD_SET_PASSWORD || 'E2e-Password-Set-2026!',
+  },
 };
