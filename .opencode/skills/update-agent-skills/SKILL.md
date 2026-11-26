@@ -51,10 +51,9 @@ not vendored; updating it re-pins the URL and validates the catalog index.
 - Look for renamed, removed, or newly added skills. Update
   `.opencode/skills/README.md` when the included/excluded tables, counts, or
   pinned refs change.
-- Confirm the expected counts: 26 Duende skills, 65 .NET skills across the six
+- Confirm the expected counts: 26 Duende skills, 38 .NET skills across the four
   curated plugins (`dotnet` 5, `dotnet-aspnetcore` 2, `dotnet-diag` 7,
-  `dotnet-msbuild` 21, `dotnet-test` 24, `dotnet-upgrade` 6), and 8 Aspire
-  catalog entries.
+  `dotnet-test` 24), and 8 Aspire catalog entries.
 - Check for duplicate skill IDs:
 
   ```bash

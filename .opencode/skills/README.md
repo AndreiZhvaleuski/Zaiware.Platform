@@ -43,33 +43,38 @@ records the URL.
 ### .NET
 
 The `dotnet/skills` repository is organized as plugins. This project includes
-six curated plugins and their skills:
+four curated plugins and their skills:
 
 | Plugin | Skills |
 | --- | --- |
 | `dotnet` | 5 |
 | `dotnet-aspnetcore` | 2 |
 | `dotnet-diag` | 7 |
-| `dotnet-msbuild` | 21 |
 | `dotnet-test` | 24 |
-| `dotnet-upgrade` | 6 |
-| **Total** | **65** |
+| **Total** | **38** |
 
 The pack root keeps the upstream `LICENSE`. The selection matches this
 repository's stack: Razor Pages, ASP.NET Core, Duende IdentityServer, Aspire,
 xUnit v3/Microsoft.Testing.Platform, and central package management.
 
-- **Excluded plugins:** `dotnet-ai`, `dotnet-advanced`, `dotnet-blazor`,
-  `dotnet-data`, `dotnet-experimental`, `dotnet-maui`, `dotnet-nuget`,
-  `dotnet-template-engine`, `dotnet-test-migration`, `dotnet-winforms`, and
-  `dotnet11`. Their skills do not apply to this repository, or they duplicate
+- **Excluded plugins:** `dotnet-msbuild` and `dotnet-upgrade` are omitted as
+  redundant with the core `msbuild`, `csharp-refactoring`, and
+  `dotnet-breaking-changes` skills. The unrelated `dotnet-ai`,
+  `dotnet-advanced`, `dotnet-blazor`, `dotnet-data`, `dotnet-experimental`,
+  `dotnet-maui`, `dotnet-nuget`, `dotnet-template-engine`,
+  `dotnet-test-migration`, `dotnet-winforms`, and `dotnet11` plugins are also
+  excluded; their skills do not apply to this repository, or they duplicate
   decisions already made here.
-- **Excluded host-specific files:** the Copilot `.agent.md` agents (13 across
-  the test, MSBuild, and migration plugins), plugin manifests, and `version.json`.
-  The affected skills define inline fallbacks when their companion agent is not
-  available.
-- **Excluded MCP server:** the MSBuild binlog MCP server. The binlog skills use
-  their documented replay fallback instead.
+- **Excluded host-specific files:** the Copilot `.agent.md` agents in the
+  selected plugins, plugin manifests, and `version.json`. The affected skills
+  define inline fallbacks when their companion agent is not available.
+- **Excluded LSP declaration:** the plugin's `lsp.json` Roslyn declaration is
+  not translated. OpenCode V2 accepts and preserves `lsp` configuration but does
+  not run language servers, expose LSP tools, or produce LSP diagnostics; C#
+  diagnostics come from `dotnet build` and `dotnet test`, as the .NET skills
+  already document.
+- **Excluded MCP server:** the MSBuild binlog MCP server that ships with the
+  excluded `dotnet-msbuild` plugin. The binlog skills are not installed.
 
 ### Aspire
 
@@ -89,11 +94,11 @@ xUnit v3/Microsoft.Testing.Platform, and central package management.
 | Duende | `identity-server-specialist`, `oauth-oidc-specialist` Claude agents | Subagents after frontmatter conversion | Convert |
 | Duende | `.claude-plugin`, `.codex-plugin`, `.cursor-plugin`, `.agents/plugins` | No marketplace/plugin loader | Omit |
 | Duende | `invocable: false` frontmatter | Not interpreted; harmless unknown field | Keep as-is |
-| .NET | Skills from 6 curated plugins (65) | Native skills | Vendor |
-| .NET | `lsp.json` Roslyn declaration | Custom `lsp` config | Translate |
-| .NET | `.agent.md` agents (13 across test/msbuild/migration) | Copilot-only format | Omit; skills fall back inline |
+| .NET | Skills from 4 curated plugins (38) | Native skills | Vendor |
+| .NET | `lsp.json` Roslyn declaration | V2 preserves but does not run LSP servers | Omit; use `dotnet build`/`dotnet test` diagnostics |
+| .NET | `.agent.md` agents in the selected plugins | Copilot-only format | Omit; skills fall back inline |
 | .NET | Plugin manifests, `version.json` | No plugin loader | Omit |
-| .NET | MSBuild binlog MCP server | MCP supported but not selected | Omit; skill uses replay fallback |
+| .NET | MSBuild binlog MCP server | MCP supported but plugin excluded | Omit with `dotnet-msbuild` |
 | Aspire | 8 skills, references, templates | Official OpenCode V2 HTTP catalog | Reference, pinned |
 | Aspire | Copilot app canvas extensions | No extension host | Omit |
 | Aspire | `aspire agent init` plugin registration | Host-specific | Do not use; catalog is the supported OpenCode route |
@@ -150,7 +155,7 @@ table.
 
 - `git diff --stat` and the full skill diff show only the intended changes.
 - Renamed, removed, or newly added skill IDs are reflected in the tables above.
-- The counts are still 26 (Duende), 65 (.NET), and 8 (Aspire), or the diff
+- The counts are still 26 (Duende), 38 (.NET), and 8 (Aspire), or the diff
   explains why they changed.
 - `find .opencode/skills -name SKILL.md -printf '%h\n' | xargs -n1 basename | sort | uniq -d`
   prints nothing.

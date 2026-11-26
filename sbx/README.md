@@ -353,7 +353,7 @@ new sandbox or a fresh clone gets them without a setup step.
 | Pack | Upstream | Mode | Skills |
 | --- | --- | --- | ---: |
 | Duende | `DuendeSoftware/duende-skills` | vendored at a pinned commit | 26 |
-| .NET | `dotnet/skills` | vendored, six curated plugins | 65 |
+| .NET | `dotnet/skills` | vendored, four curated plugins | 38 |
 | Aspire | `microsoft/aspire-skills` | OpenCode HTTP catalog at a pinned commit | 8 |
 
 The Aspire pack is the only non-vendored pack. OpenCode downloads its

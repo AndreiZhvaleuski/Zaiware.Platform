@@ -22,14 +22,6 @@
       }
     }
   },
-  "lsp": {
-    "roslyn": {
-      "command": ["dotnet", "dnx", "roslyn-language-server", "--yes", "--prerelease", "--", "--stdio", "--daemon-mode", "--autoLoadProjects"],
-      "extensions": [".cs", ".razor", ".cshtml"]
-    },
-    "csharp": { "disabled": true },
-    "razor": { "disabled": true }
-  },
   "providers": {
     "opencode-go": {
       "env": [

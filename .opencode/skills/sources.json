@@ -19,12 +19,10 @@
         "plugins/dotnet/skills",
         "plugins/dotnet-aspnetcore/skills",
         "plugins/dotnet-diag/skills",
-        "plugins/dotnet-msbuild/skills",
-        "plugins/dotnet-test/skills",
-        "plugins/dotnet-upgrade/skills"
+        "plugins/dotnet-test/skills"
       ],
       "license": "LICENSE",
-      "hash": "sha256:32123f21dc87d1dc0122c0694dac96161d8ade7bfd7feca602231eeb82f4cfd9"
+      "hash": "sha256:5017d7a01d92499bacd5326b407971bc9eb540f28e8a4bc05192afd01f3746fd"
     },
     "aspire": {
       "mode": "catalog",

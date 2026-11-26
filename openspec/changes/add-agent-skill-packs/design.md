@@ -5,7 +5,7 @@
 See `proposal.md` — Why. Constraints that shape the approach:
 
 - OpenCode V2 (2.4.1 here) discovers skills from `.opencode/skills` (native), `.claude/skills`, and `.agents/skills`, plus local paths or HTTP catalogs in the `skills` config array. A skill is a directory containing `SKILL.md`; grouping directories are allowed up to six levels deep, and the skill ID is the containing directory name.
-- OpenCode supports Markdown subagents under `.opencode/agents`, custom LSP servers via `lsp`, and local or remote MCP servers via `mcp.servers`. It does **not** support Claude/Copilot/Cursor/Codex plugin marketplaces, Copilot `.agent.md` agents, or Copilot canvas extensions.
+- OpenCode supports Markdown subagents under `.opencode/agents` and local or remote MCP servers via `mcp.servers`. V2 accepts and preserves `lsp` configuration but does not run language servers, expose LSP tools, or produce LSP diagnostics. It does **not** support Claude/Copilot/Cursor/Codex plugin marketplaces, Copilot `.agent.md` agents, or Copilot canvas extensions.
 - `.agents/skills` in this repository is owned by OpenSpec (`.openspec-target` = `opencode`). The new packs must not live there or they risk colliding with OpenSpec-managed content.
 - The global `~/.config/opencode` directory is not persisted across `sbx env` recreation; project files are. Installation therefore has to be project-local.
 - The OpenSpec kit already grants `*.githubusercontent.com:443`, so the Aspire catalog on `raw.githubusercontent.com` is reachable. `codeload.github.com` and `api.github.com` are also already granted, which covers the update script.
@@ -22,8 +22,9 @@ See `proposal.md` — Why. Constraints that shape the approach:
 **Non-Goals:**
 
 - Reproducing Claude/Copilot plugin behavior (marketplaces, slash commands, agent handoffs, canvas extensions).
-- Porting the `dotnet-test` and `dotnet-msbuild` Copilot agent pipelines; their skills already define inline fallbacks.
+- Porting the `dotnet-test` Copilot agent pipeline; its skill defines an inline fallback.
 - Registering the MSBuild binlog MCP server. The affected skills fall back to binlog replay, and the extra server was not selected.
+- LSP-based diagnostics. V2 accepts `lsp` configuration but does not run language servers; C# diagnostics use `dotnet build`/`dotnet test`.
 - Auto-updating on session start. Updates are explicit and committed.
 
 ## Pack compatibility review
@@ -34,11 +35,11 @@ See `proposal.md` — Why. Constraints that shape the approach:
 | Duende | `identity-server-specialist`, `oauth-oidc-specialist` Claude agents | Subagents after frontmatter conversion | Convert |
 | Duende | `.claude-plugin`, `.codex-plugin`, `.cursor-plugin`, `.agents/plugins` | No marketplace/plugin loader | Omit |
 | Duende | `invocable: false` frontmatter | Not interpreted; harmless unknown field | Keep as-is |
-| .NET | Skills from 6 curated plugins (65) | Native skills | Vendor |
-| .NET | `lsp.json` Roslyn declaration | Custom `lsp` config | Translate |
-| .NET | `.agent.md` agents (13 across test/msbuild/migration) | Copilot-only format | Omit; skills fall back inline |
+| .NET | Skills from 4 curated plugins (38) | Native skills | Vendor |
+| .NET | `lsp.json` Roslyn declaration | V2 preserves but does not run LSP servers | Omit; use compiler/test commands |
+| .NET | `.agent.md` agents in the selected plugins | Copilot-only format | Omit; skills fall back inline |
 | .NET | Plugin manifests, `version.json` | No plugin loader | Omit |
-| .NET | MSBuild binlog MCP server | MCP supported but not selected | Omit; skill uses replay fallback |
+| .NET | MSBuild binlog MCP server | MCP supported but plugin excluded | Omit with `dotnet-msbuild` |
 | Aspire | 8 skills, references, templates | Official OpenCode V2 HTTP catalog | Reference, pinned |
 | Aspire | Copilot app canvas extensions | No extension host | Omit |
 | Aspire | `aspire agent init` plugin registration | Host-specific | Do not use; catalog is the supported OpenCode route |
@@ -66,9 +67,9 @@ Rationale: native OpenCode location, highest discovery precedence, survives sand
 Duplicate the selected folders from a `codeload.github.com` tarball at a full commit SHA and commit the result:
 
 - Duende `aa760867c3e3de167b41dff7e26b4002caf051b1` — all 26 skills, 40 files, ~892 KB.
-- .NET `a273ceb823340c260b796ef49113b399430472a9` — plugins `dotnet` (5), `dotnet-aspnetcore` (2), `dotnet-diag` (7), `dotnet-msbuild` (21), `dotnet-test` (24), `dotnet-upgrade` (6); 195 files.
+- .NET `a273ceb823340c260b796ef49113b399430472a9` — plugins `dotnet` (5), `dotnet-aspnetcore` (2), `dotnet-diag` (7), and `dotnet-test` (24); 38 skills, 130 files.
 
-Copy each upstream `LICENSE` into the pack root. Excluded .NET plugins: `dotnet-ai`, `dotnet-advanced`, `dotnet-blazor`, `dotnet-data`, `dotnet-experimental`, `dotnet-maui`, `dotnet-nuget`, `dotnet-template-engine`, `dotnet-test-migration`, `dotnet-winforms`, `dotnet11`. Rationale: this repository is Razor Pages + IdentityServer + Aspire on .NET 10, with central package management already in place and xUnit v3/Microsoft.Testing.Platform already selected.
+Copy each upstream `LICENSE` into the pack root. Excluded .NET plugins: `dotnet-msbuild` and `dotnet-upgrade` are redundant with the core `msbuild`, `csharp-refactoring`, and `dotnet-breaking-changes` skills; `dotnet-ai`, `dotnet-advanced`, `dotnet-blazor`, `dotnet-data`, `dotnet-experimental`, `dotnet-maui`, `dotnet-nuget`, `dotnet-template-engine`, `dotnet-test-migration`, `dotnet-winforms`, and `dotnet11` are unrelated or conflict with decisions already made here. Rationale: this repository is Razor Pages + IdentityServer + Aspire on .NET 10, with central package management already in place and xUnit v3/Microsoft.Testing.Platform already selected.
 
 ### D3 — Aspire uses its official OpenCode V2 catalog, pinned by URL
 
@@ -96,22 +97,11 @@ Drop Claude-only fields (`name`, `tools`, `model`). No model is pinned; the suba
 
 **Review of Duende's official OpenCode guidance** (`duende-skills` README → OpenCode): its global paths (`~/.config/opencode/skills`, `~/.config/opencode/agents`) and per-skill `SKILL.md` + bundled-directory copy are correct for V2, and `npx skills … -a opencode -g` installs to that same global skills directory. Two differences matter here: (1) those Claude agent files carry no `mode`, and a V2 custom agent defaults to `primary`, so the official `cp agents/*.md` step loads the specialists as top-level agents rather than subagents; (2) the recommended `npx` route is global, unpinned, needs npm registry egress, and this sandbox does not persist `~/.config/opencode`, while project-scope `npx` writes to `.agents/skills`, which OpenSpec owns in this repository. The guidance is therefore correct for a normal global setup but not for this repo; this design keeps its valid layout and adds `mode: subagent`, a pinned commit, and project-local installation. Its "directory names must match frontmatter `name`" note is conservative — V2 derives the ID from the directory name and treats `name` as a display label — and remains harmless because our directory names already match.
 
-### D5 — Roslyn LSP replaces the built-in C# servers
+### D5 — No LSP configuration; V2 does not run language servers
 
-Add a custom `roslyn` server using the command from the .NET plugin's `lsp.json`:
+OpenCode V2 accepts and preserves `lsp` configuration, but the V2 migration guide states that it does not run language servers, expose LSP tools, or produce LSP diagnostics. The .NET plugin's `lsp.json` Roslyn declaration is therefore not translated into the project config, and the built-in `csharp`/`razor` server overrides are unnecessary.
 
-```json
-"lsp": {
-  "roslyn": {
-    "command": ["dotnet", "dnx", "roslyn-language-server", "--yes", "--prerelease", "--", "--stdio", "--daemon-mode", "--autoLoadProjects"],
-    "extensions": [".cs", ".razor", ".cshtml"]
-  },
-  "csharp": { "disabled": true },
-  "razor": { "disabled": true }
-}
-```
-
-Rationale: the built-in `csharp` server and the VS Code-dependent `razor` server would duplicate or compete with Roslyn. Disabling both keeps one server per file. The command uses `dotnet dnx`, so the first start may restore the tool; NuGet egress is already allowed. If the server rejects `.cshtml`/`.razor` because OpenCode cannot send the vendor's `aspnetcorerazor` language id, restrict `extensions` to `.cs` and record the limitation in the provenance document.
+C# diagnostics come from `dotnet build`, `dotnet test`, and the .NET skills' compiler/tool workflows. The `csharp-expert` skill already treats LSP as optional and falls back to a build or test when it is unavailable. Revisit this decision if a future V2 release executes LSP.
 
 ### D6 — Microsoft Learn is a remote MCP server
 
@@ -143,11 +133,10 @@ No authentication and no API key. The durable enablement is `learn.microsoft.com
 
 ## Risks / Trade-offs
 
-- [~100 added skills load their descriptions on every step] → Curated .NET set; skill bodies load only on demand. If noise is a problem, mark low-value IDs with `metadata.opencode/autoinvoke: false`.
+- [~72 added skills load their descriptions on every step] → Curated .NET set; skill bodies load only on demand. If noise is a problem, mark low-value IDs with `metadata.opencode/autoinvoke: false`.
 - [Vendored content drifts from upstream] → `sources.json` pins plus `--check`; update skill requires reviewing the diff before commit.
 - [Aspire catalog needs network on a fresh cache] → `*.githubusercontent.com` is already allowed and the cache lives on the persistent volume; fall back to vendoring if offline sessions become a requirement.
-- [Roslyn server rejects Razor/cshtml language IDs] → Verify at apply; restrict to `.cs` and document the limitation.
-- [Roslyn via `dotnet dnx` is slow or unavailable on first start] → Verify the command directly and pre-warm the tool cache during apply; sessions continue without diagnostics per spec.
+- [No in-loop C#/Razor diagnostics] → V2 does not run LSP; `dotnet build`/`dotnet test` and the .NET skills' compiler workflows provide diagnostics. The session continues without language-server feedback.
 - [Microsoft Learn blocked by sandbox policy] → Kit entry for future sandboxes; current-instance verification needs a host approval. The server is additive, so a block does not affect other packs.
 - [.NET agent-dependent skills behave differently] → `code-testing` explicitly executes its workflow inline when `test-engineer` is unavailable; document other agent-oriented skills as agent-assisted only.
 - [Upstream renames a skill or changes IDs] → Update procedure includes count/duplicate checks; renamed IDs show up in the diff and in the provenance table.
@@ -156,12 +145,12 @@ No authentication and no API key. The durable enablement is `learn.microsoft.com
 
 1. Create the sync script, manifest, provenance document, and update skill; run the script to materialize Duende and .NET packs and copy licenses.
 2. Convert the two Duende specialists into `.opencode/agents`.
-3. Edit `.opencode/opencode.json` for the Aspire catalog, Roslyn LSP, and Microsoft Learn MCP while preserving existing keys.
+3. Edit `.opencode/opencode.json` for the Aspire catalog and Microsoft Learn MCP while preserving existing keys.
 4. Add `learn.microsoft.com:443` to `sbx/kits/dotnet/dotnet.yaml`.
-5. Verify in a session: all packs advertised, one skill per pack loads with its supporting files, both subagents launch, Roslyn starts on a `.cs` edit, and `opencode mcp list` shows the three servers (Learn may require host approval).
+5. Verify in a session: all packs advertised, one skill per pack loads with its supporting files, both subagents launch, `dotnet build` reports compiler errors, and `opencode mcp list` shows the three servers (Learn may require host approval).
 6. Commit in reviewable units: vendored packs + provenance/update tooling; agents; config; kit egress.
 7. Rollback: revert the commits; no data or external systems to unwind. The Aspire catalog cache can be left in place.
 
 ## Open Questions
 
-None. The remaining verification (Razor language ID acceptance, Learn approval) is handled by fallbacks already recorded in Risks.
+None. The V2 migration guide confirms `lsp` configuration is preserved but not executed, so the Roslyn capability was dropped; Learn approval is handled by the kit egress and the recorded fallback.

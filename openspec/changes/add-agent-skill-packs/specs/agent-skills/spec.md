@@ -36,17 +36,17 @@ Sessions SHALL expose the Duende `identity-server-specialist` and `oauth-oidc-sp
 
 ### Requirement: Curated .NET skills are available
 
-Sessions SHALL expose the skills from the `dotnet`, `dotnet-aspnetcore`, `dotnet-diag`, `dotnet-msbuild`, `dotnet-test`, and `dotnet-upgrade` plugins of the .NET team skill repository, and SHALL NOT install plugins unrelated to this repository's stack.
+Sessions SHALL expose the skills from the `dotnet`, `dotnet-aspnetcore`, `dotnet-diag`, and `dotnet-test` plugins of the .NET team skill repository. The `dotnet-msbuild` and `dotnet-upgrade` plugins SHALL be excluded as redundant with the core `msbuild`, `csharp-refactoring`, and `dotnet-breaking-changes` skills, and no other unrelated plugins SHALL be installed.
 
 #### Scenario: Build and test work discovers a .NET skill
 
-- **WHEN** a session investigates an MSBuild failure, an xUnit/Microsoft.Testing.Platform test run, an ASP.NET Core endpoint, or a .NET upgrade
+- **WHEN** a session investigates an MSBuild failure, an xUnit/Microsoft.Testing.Platform test run, an ASP.NET Core endpoint, or a C# refactoring/breaking-change review
 - **THEN** at least one skill from the selected .NET plugins is advertised as relevant and can be loaded by ID
 
 #### Scenario: Unrelated .NET plugins are absent
 
 - **WHEN** the available skills are listed
-- **THEN** no skill from the Blazor, MAUI, WinForms, AI, experimental, template-engine, NuGet, or test-migration plugins is advertised
+- **THEN** no skill from the `dotnet-msbuild` or `dotnet-upgrade` plugins, or from the Blazor, MAUI, WinForms, AI, experimental, template-engine, NuGet, or test-migration plugins, is advertised
 
 ### Requirement: Aspire skills load from the official pinned catalog
 
@@ -107,7 +107,7 @@ The installed setup SHALL NOT depend on Claude, Copilot, Cursor, or Codex plugin
 #### Scenario: Session starts with only portable components
 
 - **WHEN** an OpenCode session starts at the repository root
-- **THEN** it loads skills, subagents, LSP, and MCP configuration without requiring a plugin marketplace or an unsupported file format
+- **THEN** it loads skills, subagents, and MCP configuration without requiring a plugin marketplace or an unsupported file format
 
 #### Scenario: Unsupported components are documented, not half-installed
 
