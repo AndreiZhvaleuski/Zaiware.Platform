@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines which MCP servers OpenCode exposes for development sessions in this repository, and the toolchain, persistence, and network conditions they require to keep working across machines and sandbox recreations.
+Defines which MCP servers OpenCode exposes for development sessions in this repository, and the toolchain, persistence, and network conditions they require to keep working in kit-created sandboxes and across sandbox recreations.
 
 ## ADDED Requirements
 
@@ -28,11 +28,11 @@ OpenCode sessions started in this repository SHALL expose the Duende Documentati
 - **WHEN** the agent searches the indexed Duende content for a documented concept
 - **THEN** the server returns results sourced from the live Duende documentation, blog, or samples index
 
-### Requirement: MCP commands are portable across machines
-The committed project configuration SHALL launch both MCP servers through the `dnx` package runner by name, without machine-specific absolute paths, so the same configuration works on any machine whose .NET 10 SDK provides `dnx` on PATH.
+### Requirement: MCP commands are portable across kit-created sandboxes
+The committed project configuration SHALL launch both MCP servers through the `dnx` package runner by name, without machine-specific absolute paths, so the same configuration works in any sandbox created from this repository's kit configuration whose .NET 10 SDK provides `dnx` on PATH.
 
-#### Scenario: Clone on another machine connects without config edits
-- **WHEN** the repository is used on a machine with the .NET 10 SDK installed and `dnx` resolvable on PATH
+#### Scenario: Clone in a kit-created sandbox connects without config edits
+- **WHEN** the repository is used in a sandbox created from this repository's kit configuration with the .NET 10 SDK installed and `dnx` resolvable on PATH
 - **THEN** both MCP servers connect from the committed configuration with no local modifications
 
 ### Requirement: The sandbox toolchain exposes dnx on PATH
@@ -40,7 +40,7 @@ The sandbox toolchain defined in this repository SHALL expose `dnx` on PATH in e
 
 #### Scenario: Fresh shell resolves dnx
 - **WHEN** a new shell, login or non-login, starts in the sandbox
-- **THEN** `dnx` resolves on PATH and reports its version
+- **THEN** `dnx` resolves on PATH and `dnx --help` shows the tool runner usage
 
 #### Scenario: Recreated sandbox still exposes dnx
 - **WHEN** the sandbox is destroyed and recreated from the repository's kit configuration

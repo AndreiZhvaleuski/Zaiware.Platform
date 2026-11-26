@@ -6,7 +6,7 @@ See `proposal.md` for motivation. Current state and constraints that shape the a
 
 - The sandbox's dotnet kit (`sbx/kits/dotnet/`) bakes the .NET 10 SDK (10.0.401, dotnetup-managed, `DOTNET_ROOT=/home/agent/.local/share/dotnetup/dotnet`) into the image and stages `/usr/local/bin/dotnet` and `/usr/local/bin/dotnetup` as symlinks at build time. `dnx` ships inside that SDK root but is **not** staged, so it is only reachable by absolute path. `/usr/local/bin` is on every bash `PATH` and on the running OpenCode service's `PATH` (verified via the service process environment).
 - `.opencode/opencode.json` currently contains only the `providers` block. OpenCode v2 places MCP servers under `mcp.servers`; a same-named project server entry replaces the global one; config hot-reloads without restart.
-- The sandbox runs the workspace in **clone mode**: uncommitted files in the clone are lost on `sbx env rm`; the OpenCode data directory (`~/.local/share/opencode`) is a persistent volume (`volume@1`) that **reattaches** across recreation. The global `~/.config/opencode/opencode.json` is **not** persisted — the opencode-server boot hook rewrites it (merging only the `mcp-gateway` entry) on every boot, so any hand-added global MCP entry is transient by design.
+- The sandbox runs the workspace in **clone mode**: uncommitted files in the clone are lost on `sbx env rm`; the OpenCode data directory (`~/.local/share/opencode`) is a persistent volume (`volume@1`) that **reattaches** across recreation. The global `~/.config/opencode/opencode.json` is **not** persisted — the opencode-server boot hook merges only the `mcp-gateway` entry on every boot, so any hand-added global MCP entry is transient by design.
 - Kit image changes only take effect after `sbx env rm` + `sbx env create` (rebuild). The NuGet MCP server (`NuGet.Mcp.Server`) was already verified end-to-end in this sandbox (initialize handshake + 6 tools live); the Duende server was verified during planning (see the matrix below).
 
 ## Goals / Non-Goals
@@ -14,7 +14,7 @@ See `proposal.md` for motivation. Current state and constraints that shape the a
 **Goals:**
 
 - `dnx` resolvable on PATH everywhere in the sandbox, durable in the kit image, with a one-command bridge for the running instance.
-- Both MCP servers registered in the committed project config with **portable** commands (no machine-specific absolute paths).
+- Both MCP servers registered in the committed project config with **portable** commands (no machine-specific absolute paths) for sandboxes created from this repository's kit configuration.
 - The Duende SQLite index pinned to the persistent volume, outside the repo, guaranteed-present on any boot (fresh volume included).
 - Duende indexing egress documented in the kit's network policy (deny-by-default portability).
 
@@ -40,7 +40,7 @@ Rationale: identical mechanism to `dotnet` ("no shell profile is needed", per th
 
 ### D2 — Project config with portable `dnx` commands
 
-`.opencode/opencode.json` gains `mcp.servers.nuget` and `mcp.servers.duende-mcp`, both launched as plain `dnx <package> …` (resolved via PATH). No absolute sandbox paths in the committed file, so the same config works on any machine with a .NET 10 SDK (Windows installs put `dnx` on PATH via the installer, per the .NET guide). The existing `providers` block stays untouched. Per-server `timeout.startup: 120000` overrides the 30 s default: `dnx` downloads the tool package on first use, and a cold cache after sandbox recreation can exceed 30 s.
+`.opencode/opencode.json` gains `mcp.servers.nuget` and `mcp.servers.duende-mcp`, both launched as plain `dnx <package> …` (resolved via PATH). No absolute sandbox paths appear in the committed file, so the same config works in any sandbox created from this repository's kit configuration with a .NET 10 SDK. The existing `providers` block stays untouched. Per-server `timeout.startup: 120000` overrides the 30 s default: `dnx` downloads the tool package on first use, and a cold cache after sandbox recreation can exceed 30 s.
 
 ### D3 — Duende DB location: `cwd` + the server's documented default, not `--database`
 
@@ -54,7 +54,7 @@ Verified behavior matrix for `Duende.Documentation.Mcp` (shipped version reports
 | absolute path, parent exists | honored — DB at the given path |
 | absolute path, no `--` separator | honored |
 
-So the only honored form (`--database <absolute path>`) is machine-specific and unusable in a committed config, and the relative form silently falls back anyway. The portable way to pin the exact location is `cwd` + the default: `cwd: "~/.local/share/opencode/duende-mcp"` → DB at `~/.local/share/opencode/duende-mcp/mcp.db`. The command stays exactly `["dnx", "Duende.Documentation.Mcp", "--yes", "--"]`, the shape Duende documents and the one verified working.
+So the only honored form (`--database <absolute path>`) is machine-specific and unusable in a committed config, and the relative form silently falls back anyway. The sandbox-portable way to pin the exact location is `cwd` + the default: `cwd: "~/.local/share/opencode/duende-mcp"` → DB at `~/.local/share/opencode/duende-mcp/mcp.db`. The command stays exactly `["dnx", "Duende.Documentation.Mcp", "--yes", "--"]`, the shape Duende documents and the one verified working.
 
 ### D4 — The cwd directory is guaranteed by the opencode-server kit's install hook
 
@@ -66,11 +66,11 @@ A local MCP server cannot start in a nonexistent `cwd`, and a fresh data volume 
   description: Make the Duende MCP index directory writable by agent
 ```
 
-That kit already owns the volume's mount root, so this is the pattern-consistent place; it makes the Duende DB location self-healing on any volume state. Alternatives rejected: repo-local DB (clone-mode recreation loses it and pollutes the tree), `/tmp` (lost on every recreation), relying on a manual `mkdir` (breaks silently on fresh volumes).
+That kit already owns the volume's mount root, so this is the pattern-consistent place; it makes the Duende DB location self-healing on any volume state. This guarantee applies to sandboxes created from the repository's kits; a machine outside that workflow must create the configured cwd separately. Alternatives rejected: repo-local DB (clone-mode recreation loses it and pollutes the tree), `/tmp` (lost on every recreation), relying on a manual `mkdir` (breaks silently on fresh kit-created volumes).
 
 ### D5 — Network allows live in the dotnet kit, next to the NuGet entries
 
-Add to `sbx/kits/dotnet/dotnet.yaml` `network-policy@1` runtime allow: `docs.duendesoftware.com:443`, `duendesoftware.com:443`, `github.com:443`, `codeload.github.com:443` (docs llms.txt, blog RSS, samples zip download). All four were verified reachable through the *current* sandbox policy during planning, so these entries are documentation/portability for future sandboxes, consistent with the kit's deny-by-default philosophy. `github.com` may already be allowed by the provider-keys kit — dedupe during implementation if so; a duplicate allow is harmless.
+Add to `sbx/kits/dotnet/dotnet.yaml` `network-policy@1` runtime allow: `docs.duendesoftware.com:443`, `duendesoftware.com:443`, and `codeload.github.com:443` (docs llms.txt, blog RSS, samples zip download). The composed OpenSpec kit already grants `github.com:443`, so the dotnet kit does not duplicate that grant. All endpoints were verified reachable through the *current* sandbox policy during planning, so these entries document the composed policy for future sandboxes, consistent with the kits' deny-by-default philosophy.
 
 ### D6 — Arg shapes follow vendor docs exactly
 
@@ -79,17 +79,17 @@ Add to `sbx/kits/dotnet/dotnet.yaml` `network-policy@1` runtime allow: `docs.due
 
 ## Risks / Trade-offs
 
-- [OpenCode's `~` expansion in a local server's `cwd` is documented ("a fixed `cwd`, such as `~`") but not yet exercised by this config] → verified at apply time via `opencode mcp list`; fallback: replace `cwd` with the absolute path `/home/agent/.local/share/opencode/duende-mcp` (sandbox-only, noted in-file) — or, last resort, unset `cwd` and gitignore a workspace-local `mcp.db`.
+- [OpenCode's `~` expansion in a local server's `cwd` is documented ("a fixed `cwd`, such as `~`")] → verified at apply time via `opencode mcp list`; fallback for a kit-created sandbox: replace `cwd` with the absolute path `/home/agent/.local/share/opencode/duende-mcp` (sandbox-only, noted in-file).
 - [The Duende tool reports version `0.0.0.0`; its `--database` handling and arg quirks may change] → we depend only on the documented default (cwd-relative `mcp.db`); if the tool updates, re-run the D3 matrix before changing the config.
 - [First `duende-mcp` connect after recreation re-downloads the tool and starts background indexing; search may be partial briefly] → `timeout.startup` covers the spawn; indexing continues async by design (verified: server answers `initialize` immediately).
 - [Kit image changes need a sandbox rebuild] → a same-instance bridge (`sudo ln -s /home/agent/.local/share/dotnetup/dotnet/dnx /usr/local/bin/dnx`) enables verification before the rebuild; it is transient and superseded by D1 at the next `sbx env create`.
-- [Windows/other-machine teammates require the .NET 10 SDK for `dnx`] → inherent requirement of both servers; the committed config itself needs no changes.
+- [Teammates must use a sandbox created from this repository's kit configuration] → the config assumes the kit-provided .NET 10 SDK, persistent OpenCode volume, and Duende cwd install hook; arbitrary non-kit machines need equivalent setup.
 - [Sdk version floats are not pinned] → `dnx` ships with the SDK; both tool versions float to latest at download time (same trade-off the vendors' own docs make; a local tool manifest could pin later if reproducibility demands it).
 
 ## Migration Plan
 
-1. Apply all file changes (tasks 1–6 in `tasks.md`) and the same-instance bridge symlink.
-2. Verify in the running instance (dnx on PATH; both servers connect; Duende DB under the persistent volume; `providers` intact).
-3. Commit in two units: kit changes; project config.
-4. On the host: `sbx env rm` + `sbx env create` — the rebuilt image carries `dnx` and the network entries; the boot hook resets the global config (transient NuGet entry gone by design); the persistent volume reattaches the Duende index.
-5. Rollback: revert the two commits; no data or external systems to unwind (the Duende DB dir can simply be deleted).
+1. Create a named branch, apply all file changes (tasks 1–6 in `tasks.md`), and apply the same-instance bridge symlink.
+2. Verify in the running instance (`dnx` on PATH; both servers connect; Duende DB under the persistent volume; `providers` intact).
+3. Commit in three units: kit changes (including kit documentation); project config; OpenSpec artifacts and task progress.
+4. On the host: `sbx env rm` + `sbx env create` — the rebuilt image carries `dnx` and the network entries; the non-persisted global config is recreated with only the boot-managed gateway merge; the persistent volume reattaches the Duende index.
+5. Rollback: revert the three commits; no data or external systems to unwind (the Duende DB dir can simply be deleted).
