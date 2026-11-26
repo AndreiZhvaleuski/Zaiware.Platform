@@ -1,8 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using Duende.IdentityModel;
+using Duende.IdentityServer;
 using Duende.IdentityServer.DataExtensions;
 using Duende.IdentityServer.Services;
 using Duende.UserManagement;
+using Duende.UserManagement.Authentication;
 using Duende.UserManagement.Authentication.Otp;
+using Duende.UserManagement.Authentication.Passwords;
 using Duende.UserManagement.Profiles;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -10,8 +14,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace Zaiware.Platform.IdentityServer.Pages.Account;
 
 public sealed class LoginModel(
+    IPasswordAuthenticator passwordAuthenticator,
+    IUserAuthenticatorsSelfService authenticatorsSelfService,
     IOtpSender otpSender,
     IUserProfileAdmin profiles,
+    SecondFactorStateCookie secondFactorStateCookie,
+    UserSessionSignIn userSession,
     IIdentityServerInteractionService interaction) : PageModel
 {
     private static readonly AttributeCode EmailCode = AttributeCode.Create("email");
@@ -23,27 +31,28 @@ public sealed class LoginModel(
 
     public sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
+        public string Identifier { get; set; } = string.Empty;
+
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = string.Empty;
+
         public string Email { get; set; } = string.Empty;
+
+        public string? ReturnUrl { get; set; }
     }
 
     public IActionResult OnGet(string? email = null, string? returnUrl = null, bool sessionExpired = false)
     {
-        if (sessionExpired)
-        {
-            SessionExpired = true;
-        }
+        SessionExpired = sessionExpired;
 
-        // A valid session skips the email step; honor the original destination when it is safe.
+        // A valid session skips the sign-in screen; honor the original destination when it is safe.
         if (User.Identity?.IsAuthenticated == true)
         {
-            if (!string.IsNullOrEmpty(returnUrl) && interaction.IsValidReturnUrl(returnUrl))
-            {
-                return LocalRedirect(returnUrl);
-            }
+            var safeReturnUrl = GetSafeReturnUrl(returnUrl);
 
-            return RedirectToPage("/Index");
+            return safeReturnUrl is null
+                ? RedirectToPage("/Index")
+                : LocalRedirect(safeReturnUrl);
         }
 
         if (!string.IsNullOrWhiteSpace(email))
@@ -51,27 +60,94 @@ public sealed class LoginModel(
             Input.Email = email;
         }
 
-        // Keep an existing value when the link does not carry a return URL.
-        if (returnUrl is not null)
-        {
-            TempData["ReturnUrl"] = returnUrl;
-        }
+        Input.ReturnUrl = GetSafeReturnUrl(returnUrl);
 
         return Page();
     }
 
-    public async Task<IActionResult> OnPostAsync()
+    /// <summary>
+    /// Handles the password form. The identifier is resolved as the unique username first
+    /// and as the email address second; both paths produce the same generic failure so the
+    /// page does not reveal whether an account exists.
+    /// </summary>
+    public async Task<IActionResult> OnPostPasswordAsync()
     {
+        Input.Identifier = Input.Identifier.Trim();
+        Input.ReturnUrl = GetSafeReturnUrl(Input.ReturnUrl);
+
+        var identifier = Input.Identifier.ToLowerInvariant();
+
+        if (identifier.Length == 0)
+        {
+            ModelState.AddModelError("Input.Identifier", "Enter your username or email.");
+        }
+
+        if (string.IsNullOrEmpty(Input.Password))
+        {
+            ModelState.AddModelError("Input.Password", "Enter your password.");
+        }
+
         if (!ModelState.IsValid)
         {
             return Page();
         }
 
-        // Normalize before anything else: EmailAddress equality is case-sensitive and the seeded
-        // profile, the OTP address, and the invite check all use the same trimmed lowercase form.
-        var normalized = Input.Email.Trim().ToLowerInvariant();
+        var password = NonValidatedPassword.Create(Input.Password);
+        UserSubjectId? subjectId = null;
 
-        if (!EmailAddress.TryCreate(normalized, out var email))
+        if (await passwordAuthenticator.TryAuthenticateAsync(
+                ProfileSchema.PreferredUsername,
+                identifier,
+                password,
+                HttpContext.RequestAborted) is PasswordAuthenticationResult.Success usernameSuccess)
+        {
+            subjectId = usernameSuccess.UserSubjectId;
+        }
+        else if (await passwordAuthenticator.TryAuthenticateAsync(
+                     EmailCode,
+                     identifier,
+                     password,
+                     HttpContext.RequestAborted) is PasswordAuthenticationResult.Success emailSuccess)
+        {
+            subjectId = emailSuccess.UserSubjectId;
+        }
+
+        if (subjectId is null)
+        {
+            ModelState.AddModelError(string.Empty, "Invalid username or password.");
+            return Page();
+        }
+
+        var authenticators = await authenticatorsSelfService.TryGetAsync(subjectId, HttpContext.RequestAborted);
+
+        if (authenticators?.TotpDeviceNames.Count > 0)
+        {
+            secondFactorStateCookie.Write(subjectId);
+
+            return RedirectToPage("/Account/TwoFactor", new { returnUrl = Input.ReturnUrl });
+        }
+
+        await userSession.SignInAsync(
+            HttpContext,
+            subjectId,
+            OidcConstants.AuthenticationMethods.Password,
+            HttpContext.RequestAborted);
+
+        return Input.ReturnUrl is null
+            ? RedirectToPage("/Index")
+            : LocalRedirect(Input.ReturnUrl);
+    }
+
+    /// <summary>
+    /// Sends a one-time code to the address entered in the passwordless form. The existing
+    /// invite-only posture is preserved: unknown addresses are declined before a code is sent,
+    /// and the authenticator remains the enforcement point at verification time.
+    /// </summary>
+    public async Task<IActionResult> OnPostSendCodeAsync()
+    {
+        Input.ReturnUrl = GetSafeReturnUrl(Input.ReturnUrl);
+
+        if (!EmailAddress.TryCreate(Input.Email.Trim().ToLowerInvariant(), out var email))
         {
             ModelState.AddModelError(
                 "Input.Email",
@@ -79,21 +155,15 @@ public sealed class LoginModel(
             return Page();
         }
 
-        // Decline unknown addresses before dispatching a code. Verification-layer enforcement in
-        // InviteOnlyOtpAuthenticator remains the backstop for any other caller.
-        var known = await profiles.TryGetAsync(
-            EmailCode,
-            normalized,
-            HttpContext.RequestAborted);
+        var normalized = email.Value;
+
+        var known = await profiles.TryGetAsync(EmailCode, normalized, HttpContext.RequestAborted);
 
         if (known is null)
         {
-            ModelState.AddModelError(
-                "Input.Email",
-                "No account found for this address. Sign-in is by invitation — ask an administrator for access.");
-            ModelState.AddModelError(
-                string.Empty,
-                "No account found for this address. Sign-in is by invitation — ask an administrator for access.");
+            const string message = "No account found for this address. Sign-in is by invitation — ask an administrator for access.";
+            ModelState.AddModelError("Input.Email", message);
+            ModelState.AddModelError(string.Empty, message);
             return Page();
         }
 
@@ -106,8 +176,8 @@ public sealed class LoginModel(
             case SendOtpResult.Sent sent:
                 TempData["OtpToken"] = sent.Token.ToString();
                 TempData["OtpEmail"] = normalized;
-                // TempData round-trips through JSON, so store primitives it can hand back intact.
                 TempData["BlockedUntil"] = sent.SendingBlockedUntilUtc.ToString("O");
+                TempData["ReturnUrl"] = Input.ReturnUrl;
                 return RedirectToPage("/Account/EnterOtp");
 
             case SendOtpResult.Blocked blocked:
@@ -125,4 +195,10 @@ public sealed class LoginModel(
                 return Page();
         }
     }
+
+    private string? GetSafeReturnUrl(string? returnUrl) =>
+        !string.IsNullOrWhiteSpace(returnUrl)
+        && (interaction.IsValidReturnUrl(returnUrl) || Url.IsLocalUrl(returnUrl))
+            ? returnUrl
+            : null;
 }

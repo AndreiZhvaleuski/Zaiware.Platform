@@ -72,39 +72,43 @@
   function setBusy(form, button, busy) {
     if (form) {
       form.setAttribute('aria-busy', busy ? 'true' : 'false');
-      all('input, select, textarea, button', form).forEach(function (control) {
-        if (control.type === 'hidden') {
+      all('input, select, textarea', form).forEach(function (control) {
+        if (control.type === 'hidden' || control.type === 'submit' || control.type === 'button') {
           return;
         }
 
-        control.disabled = busy;
+        if (busy) {
+          control.setAttribute('readonly', 'readonly');
+        } else {
+          control.removeAttribute('readonly');
+        }
       });
     }
 
     if (button) {
+      button.disabled = busy;
       button.classList.toggle('is-loading', busy);
     }
   }
 
-  all('form[data-busy-form]').forEach(function (form) {
-    form.addEventListener('submit', function (event) {
-      if (form.getAttribute('data-validating') === 'true') {
-        return;
-      }
+  function resetBusyStates() {
+    all('form[data-busy-form]').forEach(function (form) {
+      setBusy(form, form.querySelector('[type="submit"]'), false);
+    });
+  }
 
-      var button = form.querySelector('[type="submit"]');
+  all('form[data-busy-form]').forEach(function (form) {
+    form.addEventListener('submit', function () {
       if (form.checkValidity && !form.checkValidity()) {
         return;
       }
 
-      event.preventDefault();
-      setBusy(form, button, true);
+      setBusy(form, form.querySelector('[type="submit"]'), true);
       announce('Working…');
-      window.setTimeout(function () {
-        HTMLFormElement.prototype.submit.call(form);
-      }, 0);
     });
   });
+
+  window.addEventListener('pageshow', resetBusyStates);
 
   /* ---------- code input groups ---------- */
 

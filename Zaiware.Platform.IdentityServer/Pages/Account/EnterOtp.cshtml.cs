@@ -1,10 +1,7 @@
 using System.Globalization;
-using System.Security.Claims;
-using Duende.IdentityServer;
 using Duende.IdentityServer.Services;
 using Duende.UserManagement;
 using Duende.UserManagement.Authentication.Otp;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -13,6 +10,7 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 public sealed class EnterOtpModel(
     IOtpAuthenticator otpAuthenticator,
     IOtpSender otpSender,
+    UserSessionSignIn userSession,
     IIdentityServerInteractionService interaction,
     ILogger<EnterOtpModel> logger) : PageModel
 {
@@ -101,16 +99,11 @@ public sealed class EnterOtpModel(
             return Page();
         }
 
-        var claims = new[]
-        {
-            new Claim("sub", success.UserSubjectId.ToString()),
-            new Claim("email", success.Address.SubjectId.ToString()),
-        };
-
-        var identity = new ClaimsIdentity(claims, IdentityServerConstants.DefaultCookieAuthenticationScheme);
-        await HttpContext.SignInAsync(
-            IdentityServerConstants.DefaultCookieAuthenticationScheme,
-            new ClaimsPrincipal(identity));
+        await userSession.SignInAsync(
+            HttpContext,
+            success.UserSubjectId,
+            "otp",
+            HttpContext.RequestAborted);
 
         var returnUrl = TempData["ReturnUrl"] as string;
 
@@ -128,18 +121,21 @@ public sealed class EnterOtpModel(
     public async Task<IActionResult> OnPostResendAsync()
     {
         var emailText = TempData["OtpEmail"] as string;
+        var token = TempData["OtpToken"]?.ToString();
 
-        if (string.IsNullOrEmpty(emailText))
+        if (string.IsNullOrEmpty(emailText) || string.IsNullOrEmpty(token))
         {
-            return RedirectToPage("/Account/Login");
+            return RedirectToPage("/Account/Login", new { sessionExpired = true });
         }
 
         // Defensive: Login stores the normalized form, but an older cookie may carry mixed case.
         var normalized = emailText.Trim().ToLowerInvariant();
 
-        // Reading removes the value, so put it back for the page that follows.
+        // Reading removes the value, so put both the address and the token back for the page
+        // that follows. Without re-adding the token, a blocked resend would end the OTP session.
         Email = normalized;
         TempData["OtpEmail"] = normalized;
+        TempData["OtpToken"] = token;
 
         if (!EmailAddress.TryCreate(normalized, out var email))
         {

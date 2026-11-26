@@ -46,7 +46,8 @@ _ = builder.Services
             options.FromEmail = smtpOptions.FromEmail;
             options.FromName = smtpOptions.FromName;
             options.Domain = smtpOptions.Domain;
-        })));
+        })))
+    .AddInMemoryDataExtensionSchemas([ProfileSchema.UserProfile]);
 
 builder.Services.AddInviteOnlyOtpLogin();
 
@@ -56,6 +57,9 @@ _ = builder.Services
     .PersistKeysToFileSystem(new DirectoryInfo(Environment.GetRequiredEnvironmentVariable(EnvironmentVariablesNames.DataProtectionKeysStoreDirectory)));
 
 builder.Services.AddRazorPages();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<SecondFactorStateCookie>();
+builder.Services.AddScoped<UserSessionSignIn>();
 
 var app = builder.Build();
 
@@ -68,23 +72,19 @@ if (app.Environment.IsDevelopment())
             .MigrateAsync(CancellationToken.None);
     }
 
-    var seedSection = app.Configuration.GetSection("SeedUser");
-    var seedEmail = seedSection["Email"];
+    var seedUsers = app.Configuration.GetSection("SeedUsers").Get<DevelopmentSeedUser[]>() ?? [];
 
-    if (string.IsNullOrWhiteSpace(seedEmail) || !EmailAddress.TryCreate(seedEmail, out var seedAddress))
+    if (seedUsers.Length == 0)
     {
-        app.Logger.LogWarning("SeedUser:Email not configured; skipping Development user seed");
+        app.Logger.LogWarning("SeedUsers is not configured; skipping Development user seed");
     }
     else
     {
-        var seedName = seedSection["Name"];
-
         using (var scope = app.Services.CreateScope())
         {
-            await DevelopmentUserSeed.EnsureInvitedUserAsync(
+            await DevelopmentUserSeed.EnsureUsersAsync(
                 scope.ServiceProvider,
-                seedAddress.Value,
-                string.IsNullOrWhiteSpace(seedName) ? "Demo User" : seedName,
+                seedUsers,
                 CancellationToken.None);
         }
     }

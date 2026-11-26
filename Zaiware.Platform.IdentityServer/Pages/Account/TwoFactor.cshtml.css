@@ -1,0 +1,32 @@
+.twofactor__actions {
+  margin-top: var(--space-4);
+}
+
+.twofactor__recovery {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.twofactor__recovery summary {
+  min-height: var(--target);
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.twofactor__recovery summary:hover {
+  color: var(--text);
+}
+
+.twofactor__recovery[open] summary {
+  margin-bottom: var(--space-3);
+}
+
+.twofactor__recovery .field {
+  margin-bottom: var(--space-3);
+}

@@ -1,0 +1,66 @@
+@page
+@model Zaiware.Platform.IdentityServer.Pages.Account.TwoFactorModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Two-step verification";
+}
+
+<div class="card twofactor">
+  <a class="back-link" asp-page="/Account/Login" asp-route-returnUrl="@Model.Input.ReturnUrl">&#8592; Back to sign in</a>
+
+  <header class="card__header">
+    <h1 id="title" class="card__title" tabindex="-1" data-autofocus-heading>Two-step verification</h1>
+    <p class="lead">Enter the 6-digit code from your authenticator app.</p>
+  </header>
+
+  <div class="notice notice--error" role="alert" aria-live="polite" asp-validation-summary="ModelOnly"></div>
+
+  <form id="totp-form" method="post" asp-page="/Account/TwoFactor" asp-page-handler="Totp" data-busy-form novalidate>
+    <input type="hidden" asp-for="Input.ReturnUrl">
+    <fieldset class="code-inputs code-inputs--6" data-code-group data-code-pattern="numeric"
+              aria-describedby="totp-hint totp-error">
+      <legend class="visually-hidden">Authenticator code, 6 digits</legend>
+      @for (var index = 0; index < 6; index++)
+      {
+        <input name="Input.TotpDigits[@index]"
+               value="@Model.CodeDigit(index)"
+               inputmode="numeric"
+               autocomplete="@(index == 0 ? "one-time-code" : "off")"
+               maxlength="1"
+               aria-label="Digit @(index + 1) of 6"
+               spellcheck="false"
+               data-code-digit>
+      }
+    </fieldset>
+    <p class="field__hint" id="totp-hint">The code changes every 30 seconds.</p>
+    <span class="field__error" id="totp-error" role="alert" aria-live="polite" asp-validation-for="Input.TotpCode"></span>
+
+    <div class="twofactor__actions">
+      <button class="btn btn--primary btn--block" type="submit" id="verify-totp-btn">
+        <span>Verify</span><span class="btn__spinner" aria-hidden="true"></span>
+      </button>
+    </div>
+  </form>
+
+  <details class="twofactor__recovery">
+    <summary>Use a recovery code instead</summary>
+    <p class="field__hint">Each recovery code works once. Hyphens and case do not matter.</p>
+
+    <form id="recovery-form" method="post" asp-page="/Account/TwoFactor" asp-page-handler="Recovery" data-busy-form novalidate>
+      <input type="hidden" asp-for="Input.ReturnUrl">
+      <div class="field">
+        <label asp-for="Input.RecoveryCode">Recovery code</label>
+        <input asp-for="Input.RecoveryCode" id="recovery-code" type="text"
+               autocomplete="off" autocapitalize="characters" spellcheck="false"
+               inputmode="text" required aria-describedby="recovery-hint">
+        <p class="field__hint" id="recovery-hint">For example: ABCDE-FGHJK-MNP</p>
+      </div>
+      <div class="twofactor__actions">
+        <button class="btn btn--secondary btn--block" type="submit" id="verify-recovery-btn">
+          <span>Use recovery code</span><span class="btn__spinner" aria-hidden="true"></span>
+        </button>
+      </div>
+    </form>
+  </details>
+</div>
