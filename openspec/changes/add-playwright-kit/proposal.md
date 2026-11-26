@@ -30,6 +30,6 @@ The sandbox can build and run the solution, but the agent cannot render a page, 
 - `sbxenv.yaml` — one published kit reference in `kits:`.
 - `sbx/README.md` — layout, agent-context list, verify commands, and a Playwright section.
 - `sbx/MIXINS.md` — published-kit guidance and, after verification, the evidence log.
-- Sandbox lifecycle: the kit adds a ~292 MB image layer and install-time apt work, so the first create is slower; all kit changes take effect only after `sbx env rm` + `sbx env create`.
+- Sandbox lifecycle: the kit adds a ~292 MB amd64 image layer (~327 MB on arm64) and re-runs install-time apt work on every create; only the image pull is cached. All kit changes take effect only after `sbx env rm` + `sbx env create`.
 - Network policy: the kit adds install-time Debian/DHI package-repository access and runtime browser-CDN access. Sites under test still need their own policy grants.
 - No application code, APIs, credentials, or project test files change.

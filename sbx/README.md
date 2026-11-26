@@ -165,8 +165,10 @@ Each selected kit contributes focused agent context through `agent-context@1`:
 - `openspec`: use the workflow skills in `.agents/skills/openspec-*` and keep
   project artifacts under `openspec/`.
 - `playwright`: `playwright` and `@playwright/test` are global; only headless
-  Chromium is provisioned. Preserve `/opt/ms-playwright` and
-  `PLAYWRIGHT_BROWSERS_PATH`, and grant external sites separately.
+  Chromium is provisioned. Preserve `/opt/ms-playwright`; version `1.61.1`
+  exports `PLAYWRIGHT_BROWSERS_PATH` and `NODE_PATH` only for login shells, so
+  use `bash -lc` or set the browser path explicitly in non-login shells. Grant
+  external sites separately.
 - `opencode-server`: use server mode, edit only the clone, and commit completed
   work for host retrieval.
 
@@ -454,15 +456,27 @@ matching skill) is available.
 The environment pins Docker's published, verified
 `docker.io/sbx/playwright:1.61.1` mixin. It provides the global `playwright`
 CLI, `@playwright/test`, and headless Chromium for the agent without requiring a
-project-local Node install. The kit carries a single ~292 MB image layer, and
-its create hook installs Chromium's native system libraries, so the first create
-is slower. Later creates reuse the cached kit image.
+project-local Node install. The kit adds a ~292 MB amd64 image layer (~327 MB on
+arm64), and every create re-runs its install hook to add Node when needed and
+install Chromium's native system libraries. Only the image pull is cached after
+the first create; the apt work still runs on each recreation.
 
-The shared browser directory is `/opt/ms-playwright`, and the kit sets
-`PLAYWRIGHT_BROWSERS_PATH` to that path. It is writable by the agent. Preserve
-both the directory and variable: a project-local Playwright version must use a
-matching browser, which can be installed with `npx playwright install chromium`
-because the kit allows the browser CDN at runtime.
+The shared browser directory is `/opt/ms-playwright`, and it is writable by the
+agent. Version `1.61.1` exports `PLAYWRIGHT_BROWSERS_PATH` and `NODE_PATH` from
+`/etc/profile.d/playwright-env.sh`, so login shells receive them but non-login
+shells do not. That includes bare `sbx env exec` commands and the agent's default
+non-login Bash shell: `BASH_ENV` points to an empty
+`/etc/sandbox-persistent.sh`, which does not source `profile.d`. Use `bash -lc`
+when a command needs the login-shell environment, or set
+`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright` explicitly for browser commands.
+Do not duplicate these variables in `sbxenv.yaml` or another local kit.
+
+A project-local Playwright version must use a matching browser. Use the global
+`playwright install chromium` command, or a project-local
+`./node_modules/.bin/playwright` after installing that project's dependencies;
+the browser CDN is allowed at runtime. This `1.61.1` kit installs Node but not
+npm/npx, so `npx playwright ...` is not available unless npm is installed
+separately. The published context's `npx` examples do not apply to this pin.
 
 Only headless Chromium and its headless shell are provisioned. There is no
 display server, so headed mode, UI mode, and codegen are unsupported. Headless
@@ -489,28 +503,41 @@ Verify after recreation:
 sbx env exec -- playwright --version
 sbx env exec -- bash -lc 'node -e "require(\"@playwright/test\"); console.log(\"resolved\")"'
 sbx env exec -- bash -lc 'echo "$PLAYWRIGHT_BROWSERS_PATH"; test -w /opt/ms-playwright && echo writable'
-sbx env exec -- bash -lc 'printf "<title>Playwright smoke</title><h1>headless Chromium</h1>\n" > /tmp/pw-smoke.html && playwright screenshot --wait-for-timeout=1000 file:///tmp/pw-smoke.html /tmp/pw-smoke.png && test -s /tmp/pw-smoke.png && file /tmp/pw-smoke.png'
+# Known 1.61.1 limitation: both variables are unset in a non-login shell.
+sbx env exec -- bash -c 'printf "non-login PBP=%s NODE_PATH=%s\n" "${PLAYWRIGHT_BROWSERS_PATH:-unset}" "${NODE_PATH:-unset}"'
+# Serve localhost and render it with the shared browser path explicitly set.
+sbx env exec -- bash -c 'mkdir -p /tmp/pw-smoke-site; printf "<title>Playwright smoke</title><h1>headless Chromium</h1>\n" > /tmp/pw-smoke-site/index.html; python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/pw-smoke-site >/tmp/pw-smoke-server.log 2>&1 & server=$!; trap "kill $server" EXIT; sleep 0.5; PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --wait-for-timeout=1000 http://127.0.0.1:8765/ /tmp/pw-smoke.png && test -s /tmp/pw-smoke.png && head -c 8 /tmp/pw-smoke.png | od -An -tx1 | grep -q "89 50 4e 47"'
 sbx env exec -- test -s /usr/share/sandbox/kit/playwright/playwright-context.md
+sbx env exec -- bash -c 'ctx=/usr/share/sandbox/kit/playwright/playwright-context.md; grep -q "@playwright/test" "$ctx" && grep -q "/opt/ms-playwright" "$ctx" && grep -qi "headless" "$ctx" && grep -qiE "external|policy" "$ctx"'
 sbx env exec -- grep -q playwright /home/agent/.config/opencode/AGENTS.md
+# After confirming the domain is absent from sbx policy ls, this must fail with
+# a policy/proxy error. Substitute another ungranted domain if example.com is allowed.
+sbx env exec -- bash -c 'PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --wait-for-timeout=1000 https://example.com /tmp/pw-denied.png'
+# No display server: headed mode must fail rather than opening a window.
+sbx env exec -- bash -c 'PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --headed file:///tmp/pw-smoke-site/index.html /tmp/pw-headed.png'
 ```
 
-The version must be `1.61.1`, the module must resolve, the browser path must be
-`/opt/ms-playwright`, and the smoke image must be a non-empty PNG.
+The version must be `1.61.1`, the module must resolve in a login shell, the
+browser path must be `/opt/ms-playwright`, and the localhost smoke image must be
+a non-empty PNG whose first bytes are `89 50 4e 47`. The non-login probe should
+report both variables as `unset`; browser commands must set the shared path
+explicitly or run in a login shell.
 
 Do not replace the pin with `latest`. A future move to
-`docker.io/sbx/playwright:1.65.1-0` is a separate upgrade: that descriptor
-requires a `version` kit argument and declares `deb/*` requirements that this
-environment has not probed. Use the object form below, verify the dependency
-contract in an isolated sandbox, and then recreate and rerun the checks:
+`docker.io/sbx/playwright:1.65.1-0` is a separate upgrade. Its `version` setting
+is a build-phase argument baked into the published image, so consumers select
+the release by tag rather than passing `args.version`. Use the bare reference
+below in an isolated probe:
 
 ```yaml
-- source: docker.io/sbx/playwright:1.65.1-0
-  args:
-    version: "1.65.1"
+- docker.io/sbx/playwright:1.65.1-0
 ```
 
-Its `requires` entries are `deb/apt`, `deb/bash`, `deb/coreutils`, and
-`deb/grep`; a direct tag-only reference is not sufficient for that release.
+That descriptor declares `requires: [deb/apt, deb/bash, deb/coreutils, deb/grep]`,
+which this environment has not probed. It also changes the packaging to include
+npm and expose the environment to non-login Bash shells. Verify the dependency
+contract in an isolated sandbox before changing the pin, then recreate and
+rerun the checks.
 
 ## Verify
 

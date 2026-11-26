@@ -33,9 +33,14 @@ The mixin SHALL provide Chromium and its headless shell at a shared browser path
 
 #### Scenario: Shared browser path is usable
 
-- **WHEN** the agent inspects the Playwright environment and browser directory
+- **WHEN** the agent inspects the Playwright environment in a login shell or sets `PLAYWRIGHT_BROWSERS_PATH` explicitly
 - **THEN** `PLAYWRIGHT_BROWSERS_PATH` points at the shared path
 - **AND** the agent user can read and write that directory
+
+#### Scenario: Non-login shell uses the explicit shared browser path
+
+- **WHEN** the agent runs a headless browser command in a non-login shell with `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`
+- **THEN** the command uses the shared browser directory and succeeds without a display server
 
 #### Scenario: Headed-only features are not available
 
