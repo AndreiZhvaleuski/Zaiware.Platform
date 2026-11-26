@@ -94,8 +94,23 @@ if (app.Environment.IsDevelopment())
 
 _ = app.UseIdentityServer();
 
-_ = app.UseStaticFiles();
+// Sign-in and account responses must never be restored from browser history:
+// they can contain one-time codes, recovery codes, or signed-in state.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/Account"))
+    {
+        context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+        context.Response.Headers.Pragma = "no-cache";
+    }
+
+    await next(context);
+});
+
 _ = app.UseAuthorization();
-app.MapRazorPages();
+
+app.MapStaticAssets();
+app.MapRazorPages()
+    .WithStaticAssets();
 
 app.Run();

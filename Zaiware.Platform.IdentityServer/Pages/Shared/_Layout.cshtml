@@ -3,32 +3,56 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light dark">
   <title>@ViewData["Title"] · Nimbus</title>
-  <link rel="stylesheet" href="~/css/site.css">
-  <script src="~/js/otp.js" defer></script>
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('theme');
+        if (stored === 'light' || stored === 'dark') {
+          document.documentElement.setAttribute('data-theme', stored);
+        }
+      } catch (error) {
+        /* Storage can be unavailable; the system preference remains in charge. */
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="~/css/tokens.css" asp-append-version="true">
+  <link rel="stylesheet" href="~/css/primitives.css" asp-append-version="true">
+  <link rel="stylesheet" href="~/Zaiware.Platform.IdentityServer.styles.css" asp-append-version="true">
+  <script src="~/js/ui.js" defer></script>
 </head>
 <body>
-  <div class="scene" aria-hidden="true"><span class="grain"></span></div>
+  <a class="skip-link" href="#main">Skip to main content</a>
 
-  <main class="shell">
-    <section class="card" data-od-id="login-card" aria-labelledby="title">
-      <div class="content">
-        <header class="brand">
-          <span class="mark">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6 18V6l12 12V6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="brand-name">Nimbus</span>
-        </header>
+  <div class="page@(ViewData["Wide"] is true ? " page--wide" : string.Empty)">
+    <header class="site-header">
+      <a class="brand" asp-page="/Index">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M6 18V6l12 12V6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="brand__name">Nimbus</span>
+      </a>
 
-        <p class="sr-only" id="status" role="status" aria-live="polite"></p>
+      <button class="theme-toggle" id="theme-toggle" type="button" hidden aria-label="Switch theme">
+        <svg class="theme-toggle__icon theme-toggle__icon--moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+        <svg class="theme-toggle__icon theme-toggle__icon--sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </header>
 
-        @RenderBody()
-      </div>
-    </section>
+    <main id="main" tabindex="-1">
+      <p class="visually-hidden" id="status" role="status" aria-live="polite"></p>
+      @RenderBody()
+    </main>
+
     <p class="legal">By continuing you agree to the Terms and Privacy Policy.</p>
-  </main>
+  </div>
 </body>
 </html>

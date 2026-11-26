@@ -1,0 +1,9 @@
+{
+  "name": "zaiware-platform-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright end-to-end tests for the Zaiware Platform identity server. The sandbox provides @playwright/test 1.61.1 and Chromium; this manifest records the expected version only.",
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}

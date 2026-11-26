@@ -1,0 +1,44 @@
+.login__form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.login__actions {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.login__secondary {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.login__secondary-title {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-base);
+}
+
+.login__secondary-copy {
+  margin-bottom: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.login__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.login__divider::before,
+.login__divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

@@ -1,0 +1,44 @@
+.otp__email {
+  color: var(--text);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.otp__form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.otp__submit {
+  margin-top: var(--space-4);
+}
+
+.otp__resend {
+  margin: var(--space-4) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.otp__resend button {
+  min-height: var(--target);
+  padding: 0 var(--space-2);
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.otp__resend button:hover:not(:disabled) {
+  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.otp__resend button:disabled {
+  color: var(--text-subtle);
+  cursor: default;
+  font-weight: 400;
+}

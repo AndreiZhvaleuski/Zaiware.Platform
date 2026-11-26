@@ -1,0 +1,193 @@
+/*
+ * Design tokens.
+ *
+ * The theme follows the operating-system preference by default. The inline
+ * script in _Layout sets data-theme="light|dark" on <html> before this sheet
+ * loads when the user has chosen an override, so light-dark() resolves to the
+ * requested scheme without a flash. Browsers without light-dark() fall back to
+ * the explicit blocks at the bottom of this file.
+ */
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --canvas: light-dark(#f3f5fa, #0a0d13);
+  --canvas-glow: light-dark(#e7edff, #101827);
+  --surface: light-dark(#ffffff, #141a24);
+  --surface-muted: light-dark(#f7f9fd, #1a2130);
+  --surface-raised: light-dark(#ffffff, #1c2432);
+  --overlay: light-dark(rgb(15 23 42 / 45%), rgb(0 0 0 / 60%));
+
+  /* Text */
+  --text: light-dark(#14181f, #eef2f9);
+  --text-muted: light-dark(#525a68, #aab4c4);
+  --text-subtle: light-dark(#5f6877, #8d98aa);
+  --text-on-accent: light-dark(#ffffff, #0a1020);
+
+  /* Lines and controls */
+  --border: light-dark(#d5dbe6, #2b3545);
+  --border-strong: light-dark(#b6c0d0, #3c4a5f);
+  --field: light-dark(#ffffff, #10161f);
+  --field-hover: light-dark(#f7f9fd, #161e2a);
+  --placeholder: light-dark(#6b7484, #7f8a9c);
+
+  /* Accent and status */
+  --accent: light-dark(#1c4fd8, #8fb0ff);
+  --accent-hover: light-dark(#163fae, #b0c8ff);
+  --accent-soft: light-dark(#e9efff, #1b2a4a);
+  --accent-border: light-dark(#b9c9f7, #34508c);
+  --danger: light-dark(#b42318, #ff9a91);
+  --danger-hover: light-dark(#8f1c13, #ffbcb6);
+  --danger-soft: light-dark(#fff0ee, #341a1a);
+  --danger-border: light-dark(#f3b8b2, #6c2b2b);
+  --success: light-dark(#067a48, #62e0aa);
+  --success-soft: light-dark(#e9f8f0, #122c22);
+  --success-border: light-dark(#a9e3c6, #235c43);
+  --focus-ring: light-dark(#1c4fd8, #9db9ff);
+  --focus-ring-soft: light-dark(rgb(28 79 216 / 22%), rgb(157 185 255 / 26%));
+
+  /* Geometry */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --target: 44px;
+
+  /* Type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: clamp(1.35rem, 1.2rem + 0.7vw, 1.65rem);
+  --leading-tight: 1.25;
+  --leading-normal: 1.55;
+
+  /* Depth and motion */
+  --shadow-card: light-dark(0 1px 2px rgb(15 23 42 / 6%), 0 1px 2px rgb(0 0 0 / 40%));
+  --shadow-raised: light-dark(0 18px 48px -24px rgb(15 23 42 / 35%), 0 18px 48px -24px rgb(0 0 0 / 75%));
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration: 160ms;
+  --duration-slow: 260ms;
+}
+
+/* Manual override: the inline script runs before the first paint. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Fallback for browsers without light-dark(). Values mirror the pairs above. */
+@supports not (color: light-dark(#fff, #000)) {
+  :root {
+    --canvas: #f3f5fa;
+    --canvas-glow: #e7edff;
+    --surface: #ffffff;
+    --surface-muted: #f7f9fd;
+    --surface-raised: #ffffff;
+    --overlay: rgb(15 23 42 / 45%);
+    --text: #14181f;
+    --text-muted: #525a68;
+    --text-subtle: #5f6877;
+    --text-on-accent: #ffffff;
+    --border: #d5dbe6;
+    --border-strong: #b6c0d0;
+    --field: #ffffff;
+    --field-hover: #f7f9fd;
+    --placeholder: #6b7484;
+    --accent: #1c4fd8;
+    --accent-hover: #163fae;
+    --accent-soft: #e9efff;
+    --accent-border: #b9c9f7;
+    --danger: #b42318;
+    --danger-hover: #8f1c13;
+    --danger-soft: #fff0ee;
+    --danger-border: #f3b8b2;
+    --success: #067a48;
+    --success-soft: #e9f8f0;
+    --success-border: #a9e3c6;
+    --focus-ring: #1c4fd8;
+    --focus-ring-soft: rgb(28 79 216 / 22%);
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 6%);
+    --shadow-raised: 0 18px 48px -24px rgb(15 23 42 / 35%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas: #0a0d13;
+      --canvas-glow: #101827;
+      --surface: #141a24;
+      --surface-muted: #1a2130;
+      --surface-raised: #1c2432;
+      --overlay: rgb(0 0 0 / 60%);
+      --text: #eef2f9;
+      --text-muted: #aab4c4;
+      --text-subtle: #8d98aa;
+      --text-on-accent: #0a1020;
+      --border: #2b3545;
+      --border-strong: #3c4a5f;
+      --field: #10161f;
+      --field-hover: #161e2a;
+      --placeholder: #7f8a9c;
+      --accent: #8fb0ff;
+      --accent-hover: #b0c8ff;
+      --accent-soft: #1b2a4a;
+      --accent-border: #34508c;
+      --danger: #ff9a91;
+      --danger-hover: #ffbcb6;
+      --danger-soft: #341a1a;
+      --danger-border: #6c2b2b;
+      --success: #62e0aa;
+      --success-soft: #122c22;
+      --success-border: #235c43;
+      --focus-ring: #9db9ff;
+      --focus-ring-soft: rgb(157 185 255 / 26%);
+      --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+      --shadow-raised: 0 18px 48px -24px rgb(0 0 0 / 75%);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --canvas: #0a0d13;
+    --canvas-glow: #101827;
+    --surface: #141a24;
+    --surface-muted: #1a2130;
+    --surface-raised: #1c2432;
+    --overlay: rgb(0 0 0 / 60%);
+    --text: #eef2f9;
+    --text-muted: #aab4c4;
+    --text-subtle: #8d98aa;
+    --text-on-accent: #0a1020;
+    --border: #2b3545;
+    --border-strong: #3c4a5f;
+    --field: #10161f;
+    --field-hover: #161e2a;
+    --placeholder: #7f8a9c;
+    --accent: #8fb0ff;
+    --accent-hover: #b0c8ff;
+    --accent-soft: #1b2a4a;
+    --accent-border: #34508c;
+    --danger: #ff9a91;
+    --danger-hover: #ffbcb6;
+    --danger-soft: #341a1a;
+    --danger-border: #6c2b2b;
+    --success: #62e0aa;
+    --success-soft: #122c22;
+    --success-border: #235c43;
+    --focus-ring: #9db9ff;
+    --focus-ring-soft: rgb(157 185 255 / 26%);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-raised: 0 18px 48px -24px rgb(0 0 0 / 75%);
+  }
+}

@@ -6,24 +6,32 @@
     ViewData["Title"] = "Sign in";
 }
 
-<div class="step" id="step-email">
-  <h1 id="title" tabindex="-1">Sign in</h1>
-  <p class="sub">We'll email you a one-time code.</p>
-  <p class="hint-text" id="email-hint">No password needed — the code expires in 5 minutes.</p>
+<div class="card">
+  <header class="card__header">
+    <h1 id="title" class="card__title">Sign in</h1>
+    <p class="lead">We'll email you a one-time code.</p>
+  </header>
+
   @if (Model.SessionExpired)
   {
-    <div class="notice" role="alert">Your sign-in session expired or a required browser cookie was blocked. Please request a new code.</div>
+    <div class="notice notice--error" role="alert">Your sign-in session expired or a required browser cookie was blocked. Please request a new code.</div>
   }
-  <form id="email-form" method="post" asp-page="/Account/Login" novalidate>
-    <label asp-for="Input.Email">Work email</label>
-    <input asp-for="Input.Email" id="email" type="email" inputmode="email"
-           autocomplete="email" placeholder="you@company.com"
-           required aria-describedby="email-hint email-error"
-           aria-invalid="@(ViewData.ModelState["Input.Email"]?.Errors.Count > 0 ? "true" : "false")">
-    <span class="error" id="email-error" role="alert" aria-live="polite" asp-validation-for="Input.Email"></span>
-    <div class="error" role="alert" aria-live="polite" asp-validation-summary="ModelOnly"></div>
-    <button class="btn" type="submit" id="send-btn">
-      <span class="label">Send code</span><span class="spinner" aria-hidden="true"></span>
-    </button>
+
+  <form id="email-form" method="post" asp-page="/Account/Login" data-busy-form novalidate>
+    <div class="field">
+      <label asp-for="Input.Email">Work email</label>
+      <input asp-for="Input.Email" id="email" type="email" inputmode="email"
+             autocomplete="email" placeholder="you@company.com"
+             required aria-describedby="email-hint email-error"
+             aria-invalid="@(ViewData.ModelState["Input.Email"]?.Errors.Count > 0 ? "true" : "false")">
+      <p class="field__hint" id="email-hint">No password needed — the code expires in 5 minutes.</p>
+      <span class="field__error" id="email-error" role="alert" aria-live="polite" asp-validation-for="Input.Email"></span>
+    </div>
+    <div class="notice notice--error" role="alert" aria-live="polite" asp-validation-summary="ModelOnly"></div>
+    <div class="login__actions">
+      <button class="btn btn--primary btn--block" type="submit" id="send-btn">
+        <span>Send code</span><span class="btn__spinner" aria-hidden="true"></span>
+      </button>
+    </div>
   </form>
 </div>

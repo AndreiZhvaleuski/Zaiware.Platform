@@ -1,0 +1,24 @@
+.signed-in {
+  text-align: center;
+}
+
+.signed-in .card__header {
+  margin-bottom: var(--space-5);
+}
+
+.signed-in__badge {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 auto var(--space-4);
+  border: 1px solid var(--success-border);
+  border-radius: 50%;
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.signed-in__badge svg {
+  width: 1.6rem;
+  height: 1.6rem;
+}

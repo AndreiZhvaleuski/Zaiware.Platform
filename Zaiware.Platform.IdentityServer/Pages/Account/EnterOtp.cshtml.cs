@@ -29,8 +29,15 @@ public sealed class EnterOtpModel(
     {
         public string Token { get; set; } = string.Empty;
 
-        public string Code { get; set; } = string.Empty;
+        public string[] CodeDigits { get; set; } = new string[8];
+
+        public string Code => string.Concat(CodeDigits ?? []);
     }
+
+    public string CodeDigit(int index) =>
+        Input.CodeDigits is { Length: > 0 } digits && index < digits.Length
+            ? digits[index]
+            : string.Empty;
 
     public IActionResult OnGet()
     {
