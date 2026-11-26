@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Zaiware.Platform.IdentityServer;
 
 namespace Zaiware.Platform.IdentityServer.Pages.Account;
 
@@ -9,7 +10,7 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 /// TempData so a refresh or a later visit cannot reveal them again.
 /// </summary>
 [Authorize]
-public sealed class RecoveryCodesModel : PageModel
+public sealed class RecoveryCodesModel(IFlashMessage flashMessage) : PageModel
 {
     public string[] Codes { get; private set; } = [];
 
@@ -27,7 +28,9 @@ public sealed class RecoveryCodesModel : PageModel
 
     public IActionResult OnPost()
     {
-        TempData["SuccessMessage"] = "Two-factor authentication enabled and recovery codes saved.";
+        // Neutral text: this page is reached both after first enrollment and after
+        // regeneration, so claiming "enabled" would be wrong for the latter.
+        flashMessage.SetSuccess("Recovery codes saved.", "/Account");
         return RedirectToPage("/Account/Account");
     }
 }

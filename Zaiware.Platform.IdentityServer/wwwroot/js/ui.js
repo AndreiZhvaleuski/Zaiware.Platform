@@ -236,6 +236,24 @@
     }
   });
 
+  /* ---------- TOTP field normalization ---------- */
+  /* UX only: the server strips separators and validates exactly six digits again. */
+
+  all('[data-totp-input]').forEach(function (input) {
+    function normalize() {
+      var digits = input.value.replace(/[^0-9]/g, '').slice(0, 6);
+
+      if (input.value !== digits) {
+        input.value = digits;
+      }
+    }
+
+    input.addEventListener('input', normalize);
+    input.addEventListener('paste', function () {
+      window.setTimeout(normalize, 0);
+    });
+  });
+
   /* ---------- resend countdown (server-driven timestamp) ---------- */
 
   all('[data-blocked-until]').forEach(function (button) {

@@ -21,13 +21,14 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 [Authorize]
 public sealed class TotpSetupModel(
     IUserAuthenticatorsSelfService authenticators,
-    IUserProfileSelfService profiles) : PageModel
+    IUserProfileSelfService profiles,
+    IFlashMessage flashMessage) : PageModel
 {
     private static readonly AttributeCode EmailCode = AttributeCode.Create("email");
 
     [BindProperty]
     [Required(ErrorMessage = "Enter the 6-digit code from your authenticator app.")]
-    [StringLength(7, MinimumLength = 6, ErrorMessage = "Enter the 6-digit code.")]
+    [StringLength(9, MinimumLength = 6, ErrorMessage = "Enter the 6-digit code.")]
     public string Code { get; set; } = string.Empty;
 
     public string ManualKey { get; private set; } = string.Empty;
@@ -49,7 +50,7 @@ public sealed class TotpSetupModel(
 
         if (existing?.TotpDeviceNames.Count > 0)
         {
-            TempData["SuccessMessage"] = "Two-factor authentication is already enabled.";
+            flashMessage.SetSuccess("Two-factor authentication is already enabled.", "/Account");
             return RedirectToPage("/Account/Account");
         }
 
@@ -75,11 +76,19 @@ public sealed class TotpSetupModel(
             || !PlainBytesTotpKey.TryDecodeFromBase32(keyBase32, out var key)
             || key is null)
         {
-            ErrorMessages.Add("Your setup session expired. Start over to get a new key.");
-            return RedirectToPage();
+            // Do not redirect away from the error: the user needs to see why the page is
+            // asking them to start over. Issue a fresh key and render it with the notice.
+            var replacement = PlainBytesTotpKey.New();
+            keyBase32 = replacement.EncodeToBase32();
+            TempData["TotpKey"] = keyBase32;
+            ErrorMessages.Add("Your setup session expired. A new key is shown; scan it and confirm again.");
+            await LoadAsync(subjectId, replacement);
+            return Page();
         }
 
-        if (!PlainTextTotp.TryCreate(Code.Replace(" ", string.Empty).Replace("-", string.Empty), out var totp))
+        var normalizedCode = TotpCode.Normalize(Code);
+
+        if (!PlainTextTotp.TryCreate(normalizedCode, out var totp))
         {
             ErrorMessages.Add("Enter the 6-digit code from your authenticator app.");
             TempData["TotpKey"] = keyBase32;

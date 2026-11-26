@@ -5,6 +5,7 @@ using Duende.UserManagement;
 using Duende.UserManagement.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Zaiware.Platform.IdentityServer;
+using Zaiware.Platform.IdentityServer.Middleware;
 using Zaiware.Platform.ServiceDefaults.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,11 +28,12 @@ _ = builder.AddObservability()
 
 var smtpOptions = builder.Configuration.GetRequiredSmtpOtpDispatcherOptions();
 var avatarOptions = AvatarStorageOptions.FromConnectionString(
-    builder.Configuration.GetRequiredConnectionString("Avatars"));
+    builder.Configuration.GetRequiredConnectionString("Avatars"),
+    builder.Configuration["Avatars:PublicEndpoint"]);
 
 builder.Services.AddSingleton(avatarOptions);
 builder.Services.AddSingleton(avatarOptions.CreateClient());
-builder.Services.AddSingleton<AvatarStorage>();
+builder.Services.AddSingleton<IAvatarStorage, AvatarStorage>();
 
 _ = builder.Services
     .AddNpgsqlDataSource(builder.Configuration.GetRequiredConnectionString("IdentityServer"))
@@ -82,8 +84,10 @@ _ = builder.Services
 
 builder.Services.AddRazorPages();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddSingleton<SecondFactorStateCookie>();
-builder.Services.AddScoped<UserSessionSignIn>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ISecondFactorStateCookie, SecondFactorStateCookie>();
+builder.Services.AddScoped<IUserSessionSignIn, UserSessionSignIn>();
+builder.Services.AddScoped<IFlashMessage, FlashMessage>();
 
 var app = builder.Build();
 
@@ -116,33 +120,17 @@ if (app.Environment.IsDevelopment())
     _ = app.UseDeveloperExceptionPage();
 }
 
-_ = app.UseIdentityServer();
+// Security headers (including the per-request CSP nonce) apply to every response.
+app.UseSecurityHeaders();
 
 // Sign-in and account responses must never be restored from browser history:
 // they can contain one-time codes, recovery codes, or signed-in state.
+app.UseAuthPageNoStore();
+
 // Fingerprinted static assets are immutable; the fingerprint changes with the content.
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/Account"))
-    {
-        context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
-        context.Response.Headers.Pragma = "no-cache";
-    }
-    else if (FingerprintedAssets.Path().IsMatch(context.Request.Path))
-    {
-        context.Response.OnStarting(() =>
-        {
-            if (context.Response.StatusCode == StatusCodes.Status200OK)
-            {
-                context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-            }
+app.UseImmutableStaticAssetCaching();
 
-            return Task.CompletedTask;
-        });
-    }
-
-    await next(context);
-});
+_ = app.UseIdentityServer();
 
 _ = app.UseAuthorization();
 

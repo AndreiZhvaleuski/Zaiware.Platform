@@ -33,11 +33,11 @@
                data-code-digit>
       }
     </fieldset>
-    <span class="field__error" id="otp-error" role="alert" aria-live="polite" asp-validation-for="Input.Code"></span>
-    <div class="notice notice--error" role="alert" aria-live="polite" asp-validation-summary="ModelOnly"></div>
+    <span class="field__error" id="otp-error" role="alert" asp-validation-for="Input.Code"></span>
+    <div class="notice notice--error" role="alert" asp-validation-summary="ModelOnly"></div>
     @if (!string.IsNullOrEmpty(Model.ResendNotice))
     {
-      <p class="field__error" role="alert" aria-live="polite">@Model.ResendNotice</p>
+      <p class="field__error" role="alert">@Model.ResendNotice</p>
     }
     <div class="stack otp__submit">
       <button class="btn btn--primary btn--block" type="submit" id="verify-btn">

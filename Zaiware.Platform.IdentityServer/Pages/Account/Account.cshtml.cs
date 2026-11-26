@@ -18,12 +18,15 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 /// TOTP, and recovery codes.
 /// </summary>
 [Authorize]
+[RequestSizeLimit(AvatarStorage.MaxRequestBytes)]
+[RequestFormLimits(MultipartBodyLengthLimit = AvatarStorage.MaxRequestBytes)]
 public sealed class AccountModel(
     IUserProfileSelfService profileSelfService,
     IUserProfileAdmin profiles,
     IUserAuthenticatorsSelfService authenticatorsSelfService,
-    AvatarStorage avatarStorage,
-    UserSessionSignIn userSession,
+    IAvatarStorage avatarStorage,
+    IUserSessionSignIn userSession,
+    IFlashMessage flashMessage,
     ILogger<AccountModel> logger) : PageModel
 {
     private static readonly AttributeCode EmailCode = AttributeCode.Create("email");
@@ -48,6 +51,9 @@ public sealed class AccountModel(
     public int RecoveryCodeCount { get; private set; }
 
     public string? SuccessMessage { get; private set; }
+
+    /// <summary>Whether the last POST was the password form; drives its aria-invalid state.</summary>
+    public bool PasswordError { get; private set; }
 
     public List<string> ErrorMessages { get; } = [];
 
@@ -91,7 +97,7 @@ public sealed class AccountModel(
         }
 
         Load(profile);
-        SuccessMessage = TempData["SuccessMessage"] as string;
+        SuccessMessage = flashMessage.ConsumeSuccess();
         await LoadAuthenticatorStateAsync(subjectId, HttpContext.RequestAborted);
 
         return Page();
@@ -163,7 +169,7 @@ public sealed class AccountModel(
 
         await userSession.SignInAsync(HttpContext, subjectId, CurrentAuthenticationMethod(), HttpContext.RequestAborted);
 
-        TempData["SuccessMessage"] = "Profile updated.";
+        flashMessage.SetSuccess("Profile updated.");
         return RedirectToPage();
     }
 
@@ -187,7 +193,7 @@ public sealed class AccountModel(
             return RedirectToPage("/Account/Login");
         }
 
-        Load(profile, loadEditableFields: false);
+        Load(profile);
         await LoadAuthenticatorStateAsync(subjectId, HttpContext.RequestAborted);
 
         if (Avatar is null || Avatar.Length == 0)
@@ -208,10 +214,13 @@ public sealed class AccountModel(
             return Page();
         }
 
-        if (!await HasExpectedSignatureAsync(Avatar, HttpContext.RequestAborted))
+        await using (var signatureStream = Avatar.OpenReadStream())
         {
-            ErrorMessages.Add("That file does not look like a PNG, JPEG, or WebP image.");
-            return Page();
+            if (!await AvatarSignature.HasExpectedSignatureAsync(signatureStream, HttpContext.RequestAborted))
+            {
+                ErrorMessages.Add("That file does not look like a PNG, JPEG, or WebP image.");
+                return Page();
+            }
         }
 
         try
@@ -242,7 +251,7 @@ public sealed class AccountModel(
             return Page();
         }
 
-        TempData["SuccessMessage"] = "Avatar updated.";
+        flashMessage.SetSuccess("Avatar updated.");
         return RedirectToPage();
     }
 
@@ -266,7 +275,8 @@ public sealed class AccountModel(
             return RedirectToPage("/Account/Login");
         }
 
-        Load(profile, loadEditableFields: false);
+        Load(profile);
+        PasswordError = true;
         await LoadAuthenticatorStateAsync(subjectId, HttpContext.RequestAborted);
 
         if (string.IsNullOrEmpty(Security.NewPassword))
@@ -318,7 +328,7 @@ public sealed class AccountModel(
                 return Page();
             }
 
-            TempData["SuccessMessage"] = "Password changed.";
+            flashMessage.SetSuccess("Password changed.");
         }
         else
         {
@@ -331,7 +341,7 @@ public sealed class AccountModel(
                 return Page();
             }
 
-            TempData["SuccessMessage"] = "Password set.";
+            flashMessage.SetSuccess("Password set.");
         }
 
         return RedirectToPage();
@@ -367,7 +377,7 @@ public sealed class AccountModel(
             }
         }
 
-        TempData["SuccessMessage"] = "Two-factor authentication disabled.";
+        flashMessage.SetSuccess("Two-factor authentication disabled.");
         return RedirectToPage();
     }
 
@@ -408,31 +418,9 @@ public sealed class AccountModel(
 
         if (profile is not null)
         {
-            Load(profile, loadEditableFields: false);
+            Load(profile);
             await LoadAuthenticatorStateAsync(subjectId, HttpContext.RequestAborted);
         }
-    }
-
-    private static async Task<bool> HasExpectedSignatureAsync(IFormFile file, CancellationToken ct)
-    {
-        var buffer = new byte[12];
-        await using var stream = file.OpenReadStream();
-        var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
-
-        if (read < 4)
-        {
-            return false;
-        }
-
-        var isPng = read >= 8
-            && buffer[0] == 0x89 && buffer[1] == 0x50 && buffer[2] == 0x4E && buffer[3] == 0x47
-            && buffer[4] == 0x0D && buffer[5] == 0x0A && buffer[6] == 0x1A && buffer[7] == 0x0A;
-        var isJpeg = buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF;
-        var isWebp = read >= 12
-            && buffer[0] == (byte)'R' && buffer[1] == (byte)'I' && buffer[2] == (byte)'F' && buffer[3] == (byte)'F'
-            && buffer[8] == (byte)'W' && buffer[9] == (byte)'E' && buffer[10] == (byte)'B' && buffer[11] == (byte)'P';
-
-        return isPng || isJpeg || isWebp;
     }
 
     private void Load(UserProfile profile, bool loadEditableFields = true)

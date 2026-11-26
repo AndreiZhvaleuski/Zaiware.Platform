@@ -10,13 +10,13 @@
   <a class="back-link" asp-page="/Account/Account">&#8592; Back to account</a>
 
   <header class="card__header">
-    <h1 id="title" class="card__title">Set up two-factor authentication</h1>
+    <h1 id="title" class="card__title" tabindex="-1" data-autofocus-heading>Set up two-factor authentication</h1>
     <p class="lead">Scan the QR code with your authenticator app, then enter the current 6-digit code to confirm.</p>
   </header>
 
   @if (Model.ErrorMessages.Count > 0)
   {
-    <div class="notice notice--error" role="alert" aria-live="polite">
+    <div class="notice notice--error" id="setup-errors" role="alert">
       <ul>
         @foreach (var error in Model.ErrorMessages)
         {
@@ -37,9 +37,11 @@
     <div class="field">
       <label asp-for="Code">Verification code</label>
       <input asp-for="Code" id="totp-code" type="text" inputmode="numeric"
-             autocomplete="one-time-code" maxlength="7" pattern="[0-9 ]{6,7}"
-             required aria-describedby="totp-code-hint code-error">
-      <p class="field__hint" id="totp-code-hint">Six digits from your authenticator app.</p>
+             autocomplete="one-time-code" maxlength="9" pattern="[0-9 -]{6,9}"
+             required data-totp-input
+             aria-invalid="@(Model.ErrorMessages.Count > 0 ? "true" : "false")"
+             aria-describedby="totp-code-hint code-error setup-errors">
+      <p class="field__hint" id="totp-code-hint">Six digits from your authenticator app. Spaces and hyphens are ignored.</p>
       <span class="field__error" id="code-error" role="alert" asp-validation-for="Code"></span>
     </div>
     <div class="totp-setup__actions">

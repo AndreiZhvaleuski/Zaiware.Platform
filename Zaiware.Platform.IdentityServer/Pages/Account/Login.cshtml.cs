@@ -7,7 +7,6 @@ using Duende.UserManagement;
 using Duende.UserManagement.Authentication;
 using Duende.UserManagement.Authentication.Otp;
 using Duende.UserManagement.Authentication.Passwords;
-using Duende.UserManagement.Profiles;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -17,10 +16,10 @@ public sealed class LoginModel(
     IPasswordAuthenticator passwordAuthenticator,
     IUserAuthenticatorsSelfService authenticatorsSelfService,
     IOtpSender otpSender,
-    IUserProfileAdmin profiles,
-    SecondFactorStateCookie secondFactorStateCookie,
-    UserSessionSignIn userSession,
-    IIdentityServerInteractionService interaction) : PageModel
+    ISecondFactorStateCookie secondFactorStateCookie,
+    IUserSessionSignIn userSession,
+    IIdentityServerInteractionService interaction,
+    ILogger<LoginModel> logger) : PageModel
 {
     private static readonly AttributeCode EmailCode = AttributeCode.Create("email");
 
@@ -31,12 +30,14 @@ public sealed class LoginModel(
 
     public sealed class InputModel
     {
-        public string Identifier { get; set; } = string.Empty;
+        // Nullable so an omitted/empty field is validated by the handlers' own messages
+        // instead of the implicit non-nullable-required binder error.
+        public string? Identifier { get; set; }
 
         [DataType(DataType.Password)]
-        public string Password { get; set; } = string.Empty;
+        public string? Password { get; set; }
 
-        public string Email { get; set; } = string.Empty;
+        public string? Email { get; set; }
 
         public string? ReturnUrl { get; set; }
     }
@@ -48,11 +49,7 @@ public sealed class LoginModel(
         // A valid session skips the sign-in screen; honor the original destination when it is safe.
         if (User.Identity?.IsAuthenticated == true)
         {
-            var safeReturnUrl = GetSafeReturnUrl(returnUrl);
-
-            return safeReturnUrl is null
-                ? RedirectToPage("/Index")
-                : LocalRedirect(safeReturnUrl);
+            return SafeReturnUrl.Redirect(this, GetSafeReturnUrl(returnUrl));
         }
 
         if (!string.IsNullOrWhiteSpace(email))
@@ -72,17 +69,20 @@ public sealed class LoginModel(
     /// </summary>
     public async Task<IActionResult> OnPostPasswordAsync()
     {
-        Input.Identifier = Input.Identifier.Trim();
+        // A missing form field binds as null, so normalize before reading it. Trimming a
+        // null value used to throw and produce 500.
+        var identifier = (Input.Identifier ?? string.Empty).Trim().ToLowerInvariant();
+        var passwordText = Input.Password ?? string.Empty;
+        Input.Identifier = identifier;
+        Input.Password = passwordText;
         Input.ReturnUrl = GetSafeReturnUrl(Input.ReturnUrl);
-
-        var identifier = Input.Identifier.ToLowerInvariant();
 
         if (identifier.Length == 0)
         {
             ModelState.AddModelError("Input.Identifier", "Enter your username or email.");
         }
 
-        if (string.IsNullOrEmpty(Input.Password))
+        if (string.IsNullOrWhiteSpace(passwordText))
         {
             ModelState.AddModelError("Input.Password", "Enter your password.");
         }
@@ -92,7 +92,7 @@ public sealed class LoginModel(
             return Page();
         }
 
-        var password = NonValidatedPassword.Create(Input.Password);
+        var password = NonValidatedPassword.Create(passwordText);
         UserSubjectId? subjectId = null;
 
         if (await passwordAuthenticator.TryAuthenticateAsync(
@@ -120,7 +120,22 @@ public sealed class LoginModel(
 
         var authenticators = await authenticatorsSelfService.TryGetAsync(subjectId, HttpContext.RequestAborted);
 
-        if (authenticators?.TotpDeviceNames.Count > 0)
+        if (authenticators is null)
+        {
+            // Fail closed. A missing authenticator record is a backend failure, not proof
+            // that the user has no second factor. Issuing a session here would silently
+            // bypass MFA, so show a temporary error and keep the user signed out.
+            logger.LogError(
+                "Could not read authenticator state for subject {SubjectId}; refusing password sign-in rather than bypassing a possible second factor.",
+                subjectId);
+
+            ModelState.AddModelError(
+                string.Empty,
+                "We couldn't complete sign-in right now. Please try again.");
+            return Page();
+        }
+
+        if (authenticators.TotpDeviceNames.Count > 0)
         {
             secondFactorStateCookie.Write(subjectId);
 
@@ -133,21 +148,24 @@ public sealed class LoginModel(
             OidcConstants.AuthenticationMethods.Password,
             HttpContext.RequestAborted);
 
-        return Input.ReturnUrl is null
-            ? RedirectToPage("/Index")
-            : LocalRedirect(Input.ReturnUrl);
+        return SafeReturnUrl.Redirect(this, Input.ReturnUrl);
     }
 
     /// <summary>
-    /// Sends a one-time code to the address entered in the passwordless form. The existing
-    /// invite-only posture is preserved: unknown addresses are declined before a code is sent,
-    /// and the authenticator remains the enforcement point at verification time.
+    /// Sends a one-time code to the address entered in the passwordless form. Every
+    /// syntactically valid address receives the same response and advances to code entry:
+    /// pre-checking whether the account exists would turn this page into an account
+    /// enumeration oracle. Invite-only enforcement stays at verification time in
+    /// <see cref="InviteOnlyOtpAuthenticator"/>, so unknown addresses can never establish a
+    /// session and never create a user.
     /// </summary>
     public async Task<IActionResult> OnPostSendCodeAsync()
     {
         Input.ReturnUrl = GetSafeReturnUrl(Input.ReturnUrl);
 
-        if (!EmailAddress.TryCreate(Input.Email.Trim().ToLowerInvariant(), out var email))
+        var normalizedInput = (Input.Email ?? string.Empty).Trim().ToLowerInvariant();
+
+        if (!EmailAddress.TryCreate(normalizedInput, out var email))
         {
             ModelState.AddModelError(
                 "Input.Email",
@@ -156,16 +174,6 @@ public sealed class LoginModel(
         }
 
         var normalized = email.Value;
-
-        var known = await profiles.TryGetAsync(EmailCode, normalized, HttpContext.RequestAborted);
-
-        if (known is null)
-        {
-            const string message = "No account found for this address. Sign-in is by invitation — ask an administrator for access.";
-            ModelState.AddModelError("Input.Email", message);
-            ModelState.AddModelError(string.Empty, message);
-            return Page();
-        }
 
         var result = await otpSender.TrySendOtpAsync(
             new OtpAddress(OtpChannel.Email, email),
@@ -197,8 +205,5 @@ public sealed class LoginModel(
     }
 
     private string? GetSafeReturnUrl(string? returnUrl) =>
-        !string.IsNullOrWhiteSpace(returnUrl)
-        && (interaction.IsValidReturnUrl(returnUrl) || Url.IsLocalUrl(returnUrl))
-            ? returnUrl
-            : null;
+        SafeReturnUrl.Normalize(returnUrl, interaction, Url);
 }

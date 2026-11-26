@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Playwright HTML report (test-results/ is already ignored above)
+playwright-report/

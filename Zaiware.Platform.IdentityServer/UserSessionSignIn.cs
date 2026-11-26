@@ -14,7 +14,13 @@ namespace Zaiware.Platform.IdentityServer;
 /// second-factor, and one-time-code sign-ins all use this helper so the claim shape is
 /// identical regardless of the authentication method.
 /// </summary>
-public sealed class UserSessionSignIn(IUserProfileSelfService profiles)
+/// <remarks>
+/// The cookie is deliberately a browser-session cookie (<c>IsPersistent = false</c>, no
+/// <c>ExpiresUtc</c>). The previous OTP flow used a session cookie, and this change keeps
+/// that behavior for password and TOTP sign-ins too: closing the browser ends the local
+/// session instead of leaving an eight-hour persistent credential on a shared machine.
+/// </remarks>
+public sealed class UserSessionSignIn(IUserProfileSelfService profiles) : IUserSessionSignIn
 {
     private static readonly AttributeCode EmailCode = AttributeCode.Create("email");
 
@@ -68,8 +74,9 @@ public sealed class UserSessionSignIn(IUserProfileSelfService profiles)
 
         await context.SignInAsync(user, new AuthenticationProperties
         {
-            IsPersistent = true,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8),
+            // Session cookie: no ExpiresUtc and IsPersistent = false. The server-side
+            // session and the browser lifetime govern how long the user stays signed in.
+            IsPersistent = false,
             IssuedUtc = DateTimeOffset.UtcNow,
             AllowRefresh = true,
         });

@@ -1,4 +1,5 @@
 using Duende.IdentityServer.Services;
+using Duende.UserManagement;
 using Duende.UserManagement.Authentication.RecoveryCodes;
 using Duende.UserManagement.Authentication.Totp;
 using Microsoft.AspNetCore.Mvc;
@@ -9,8 +10,8 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 public sealed class TwoFactorModel(
     ITotpAuthenticator totpAuthenticator,
     IRecoveryCodeAuthenticator recoveryCodeAuthenticator,
-    SecondFactorStateCookie secondFactorStateCookie,
-    UserSessionSignIn userSession,
+    ISecondFactorStateCookie secondFactorStateCookie,
+    IUserSessionSignIn userSession,
     IIdentityServerInteractionService interaction) : PageModel
 {
     [BindProperty]
@@ -26,12 +27,13 @@ public sealed class TwoFactorModel(
 
         public string? ReturnUrl { get; set; }
 
-        public string TotpCode => string.Concat(TotpDigits ?? []);
+        public string TotpCode =>
+            Zaiware.Platform.IdentityServer.TotpCode.Normalize(string.Concat(TotpDigits ?? []));
     }
 
     public string CodeDigit(int index) =>
         Input.TotpDigits is { Length: > 0 } digits && index < digits.Length
-            ? digits[index]
+            ? digits[index] ?? string.Empty
             : string.Empty;
 
     public IActionResult OnGet(string? returnUrl = null)
@@ -40,7 +42,7 @@ public sealed class TwoFactorModel(
 
         if (User.Identity?.IsAuthenticated == true)
         {
-            return safeReturnUrl is null ? RedirectToPage("/Index") : LocalRedirect(safeReturnUrl);
+            return SafeReturnUrl.Redirect(this, safeReturnUrl);
         }
 
         if (!secondFactorStateCookie.TryRead(out _))
@@ -61,9 +63,9 @@ public sealed class TwoFactorModel(
             return RedirectToPage("/Account/Login", new { returnUrl = safeReturnUrl, sessionExpired = true });
         }
 
-        var code = Input.TotpCode;
+        var code = Zaiware.Platform.IdentityServer.TotpCode.Normalize(Input.TotpCode);
 
-        if (code.Length != 6 || !PlainTextTotp.TryCreate(code, out var totp))
+        if (!PlainTextTotp.TryCreate(code, out var totp))
         {
             return FailWithGenericError();
         }
@@ -79,7 +81,7 @@ public sealed class TwoFactorModel(
 
         await CompleteSignInAsync(subjectId);
 
-        return safeReturnUrl is null ? RedirectToPage("/Index") : LocalRedirect(safeReturnUrl);
+        return SafeReturnUrl.Redirect(this, safeReturnUrl);
     }
 
     public async Task<IActionResult> OnPostRecoveryAsync()
@@ -91,7 +93,9 @@ public sealed class TwoFactorModel(
             return RedirectToPage("/Account/Login", new { returnUrl = safeReturnUrl, sessionExpired = true });
         }
 
-        var cleanCode = Input.RecoveryCode.Replace(" ", string.Empty).Replace("-", string.Empty);
+        var cleanCode = (Input.RecoveryCode ?? string.Empty)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal);
 
         if (!PlainTextRecoveryCode.TryCreate(cleanCode, out var recoveryCode)
             || !await recoveryCodeAuthenticator.TryAuthenticateAsync(
@@ -104,7 +108,7 @@ public sealed class TwoFactorModel(
 
         await CompleteSignInAsync(subjectId);
 
-        return safeReturnUrl is null ? RedirectToPage("/Index") : LocalRedirect(safeReturnUrl);
+        return SafeReturnUrl.Redirect(this, safeReturnUrl);
     }
 
     private IActionResult FailWithGenericError()
@@ -114,7 +118,7 @@ public sealed class TwoFactorModel(
         return Page();
     }
 
-    private async Task CompleteSignInAsync(Duende.UserManagement.UserSubjectId subjectId)
+    private async Task CompleteSignInAsync(UserSubjectId subjectId)
     {
         secondFactorStateCookie.Clear();
 
@@ -126,8 +130,5 @@ public sealed class TwoFactorModel(
     }
 
     private string? GetSafeReturnUrl(string? returnUrl) =>
-        !string.IsNullOrWhiteSpace(returnUrl)
-        && (interaction.IsValidReturnUrl(returnUrl) || Url.IsLocalUrl(returnUrl))
-            ? returnUrl
-            : null;
+        SafeReturnUrl.Normalize(returnUrl, interaction, Url);
 }

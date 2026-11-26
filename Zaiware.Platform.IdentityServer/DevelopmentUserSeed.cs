@@ -30,6 +30,13 @@ public sealed class DevelopmentSeedUser
     public string Password { get; init; } = string.Empty;
 
     /// <summary>
+    /// When true, a restart resets an existing password to <see cref="Password"/>. Only the
+    /// disposable E2E identities opt in; general Development users keep a password they
+    /// changed through the account page.
+    /// </summary>
+    public bool ResetPassword { get; init; }
+
+    /// <summary>
     /// Optional Base32 TOTP secret. When present, a default TOTP device is enrolled so the
     /// sign-in challenge is deterministic for end-to-end tests.
     /// </summary>
@@ -99,6 +106,7 @@ public static class DevelopmentUserSeed
 
         var existing = await profiles.TryGetAsync(EmailCode, normalizedEmail, ct);
         var subjectId = existing?.SubjectId;
+        var isNewUser = subjectId is null;
 
         if (subjectId is null)
         {
@@ -139,8 +147,22 @@ public static class DevelopmentUserSeed
         }
 
         await EnsureAuthenticatorsAsync(authenticatorsAdmin, subjectId, normalizedEmail, ct);
-        await EnsurePasswordAsync(authenticatorsSelfService, subjectId, configured.Password, normalizedEmail, ct);
-        await EnsureTotpAsync(authenticatorsSelfService, subjectId, configured.TotpSecret, normalizedEmail, ct);
+        await EnsurePasswordAsync(
+            authenticatorsSelfService,
+            subjectId,
+            configured.Password,
+            normalizedEmail,
+            isNewUser,
+            configured.ResetPassword,
+            ct);
+        await EnsureTotpAsync(
+            authenticatorsSelfService,
+            services.GetRequiredService<ITotpAuthenticator>(),
+            subjectId,
+            configured.TotpSecret,
+            normalizedEmail,
+            logger,
+            ct);
 
         logger.LogInformation(
             "Development user {Email} is ready (username: {Username}, TOTP: {Totp})",
@@ -251,8 +273,22 @@ public static class DevelopmentUserSeed
         UserSubjectId subjectId,
         string password,
         string normalizedEmail,
+        bool isNewUser,
+        bool resetPassword,
         CancellationToken ct)
     {
+        if (!isNewUser && !resetPassword)
+        {
+            // A real Development user may have changed their password deliberately. Never
+            // overwrite it on restart; only repair an account that has no password at all.
+            var currentState = await authenticators.TryGetAsync(subjectId, ct);
+
+            if (currentState?.HasPassword == true)
+            {
+                return;
+            }
+        }
+
         var validation = await authenticators.TryValidatePasswordAsync(subjectId, password, ct);
 
         if (validation is PasswordCreationResult.Failed failed)
@@ -285,9 +321,11 @@ public static class DevelopmentUserSeed
 
     private static async Task EnsureTotpAsync(
         IUserAuthenticatorsSelfService authenticators,
+        ITotpAuthenticator totpAuthenticator,
         UserSubjectId subjectId,
         string? secret,
         string normalizedEmail,
+        ILogger logger,
         CancellationToken ct)
     {
         var current = await authenticators.TryGetAsync(subjectId, ct);
@@ -307,11 +345,6 @@ public static class DevelopmentUserSeed
             return;
         }
 
-        if (current?.TotpDeviceNames.Contains(TotpDeviceName.Default) == true)
-        {
-            return;
-        }
-
         if (!PlainBytesTotpKey.TryDecodeFromBase32(secret, out var key) || key is null)
         {
             throw new InvalidOperationException(
@@ -320,6 +353,31 @@ public static class DevelopmentUserSeed
 
         PlainBytesTotpKey validatedKey = key.Value;
         var code = PlainTextTotp.Create(GenerateTotpCode(secret, DateTimeOffset.UtcNow));
+
+        if (current?.TotpDeviceNames.Contains(TotpDeviceName.Default) == true)
+        {
+            // Verify the enrolled device still matches the configured secret. If the
+            // configured secret changed, the current code fails and the device is rebuilt;
+            // this keeps restarts deterministic without touching devices for users whose
+            // secret is not configured.
+            if (await totpAuthenticator.TryAuthenticateAsync(
+                    subjectId,
+                    TotpDeviceName.Default,
+                    code,
+                    ct))
+            {
+                return;
+            }
+
+            logger.LogInformation(
+                "Configured TOTP secret changed for Development user {Email}; rotating the default device.",
+                normalizedEmail);
+
+            foreach (var device in current.TotpDeviceNames.ToArray())
+            {
+                _ = await authenticators.TryRemoveTotpDeviceAsync(subjectId, device, ct);
+            }
+        }
 
         if (!await authenticators.TryAddTotpDeviceAsync(subjectId, TotpDeviceName.Default, validatedKey, code, ct))
         {

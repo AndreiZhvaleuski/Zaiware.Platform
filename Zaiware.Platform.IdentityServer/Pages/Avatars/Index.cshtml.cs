@@ -14,7 +14,7 @@ namespace Zaiware.Platform.IdentityServer.Pages.Avatars;
 /// </summary>
 [Authorize]
 public sealed class IndexModel(
-    AvatarStorage avatarStorage,
+    IAvatarStorage avatarStorage,
     IUserProfileSelfService profiles,
     ILogger<IndexModel> logger) : PageModel
 {

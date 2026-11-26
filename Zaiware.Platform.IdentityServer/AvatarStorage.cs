@@ -8,10 +8,21 @@ namespace Zaiware.Platform.IdentityServer;
 /// user's subject key; reads are served through short-lived presigned URLs and never
 /// expose the bucket publicly.
 /// </summary>
-public sealed class AvatarStorage(IAmazonS3 s3, AvatarStorageOptions options)
+/// <remarks>
+/// When <see cref="AvatarStorageOptions.PublicServiceUrl"/> is configured, a second S3
+/// client is used only for presigning so the URL the browser receives points at the
+/// host-visible RustFS endpoint. PUT/HEAD stay on the internal endpoint.
+/// </remarks>
+public sealed class AvatarStorage(IAmazonS3 s3, AvatarStorageOptions options) : IAvatarStorage
 {
     /// <summary>The maximum accepted avatar size (2 MB).</summary>
     public const long MaxBytes = 2 * 1024 * 1024;
+
+    /// <summary>
+    /// The request body limit for the avatar handler: the file cap plus multipart/form
+    /// overhead. Kestrel rejects larger bodies before the whole form is buffered.
+    /// </summary>
+    public const long MaxRequestBytes = MaxBytes + (64 * 1024);
 
     private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -19,6 +30,9 @@ public sealed class AvatarStorage(IAmazonS3 s3, AvatarStorageOptions options)
         "image/jpeg",
         "image/webp",
     };
+
+    private readonly IAmazonS3 _presignClient =
+        options.PublicServiceUrl is null ? s3 : options.CreatePublicClient();
 
     /// <summary>Whether the content type is one of the accepted image formats.</summary>
     public static bool IsAllowedContentType(string? contentType) =>
@@ -79,7 +93,7 @@ public sealed class AvatarStorage(IAmazonS3 s3, AvatarStorageOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(objectKey);
 
-        var url = s3.GetPreSignedURL(new GetPreSignedUrlRequest
+        var url = _presignClient.GetPreSignedURL(new GetPreSignedUrlRequest
         {
             BucketName = options.BucketName,
             Key = objectKey,
@@ -90,7 +104,9 @@ public sealed class AvatarStorage(IAmazonS3 s3, AvatarStorageOptions options)
         // The SDK emits https for presigned URLs even when the endpoint is plain http.
         // SigV4 signs the host, not the scheme, so matching the configured endpoint keeps
         // the signature valid for local RustFS over http.
-        if (options.ServiceUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+        var endpoint = options.PublicServiceUrl ?? options.ServiceUrl;
+
+        if (endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             && url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             url = string.Concat("http://", url.AsSpan("https://".Length));

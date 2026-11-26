@@ -10,7 +10,7 @@ namespace Zaiware.Platform.IdentityServer.Pages.Account;
 public sealed class EnterOtpModel(
     IOtpAuthenticator otpAuthenticator,
     IOtpSender otpSender,
-    UserSessionSignIn userSession,
+    IUserSessionSignIn userSession,
     IIdentityServerInteractionService interaction,
     ILogger<EnterOtpModel> logger) : PageModel
 {
@@ -105,17 +105,15 @@ public sealed class EnterOtpModel(
             "otp",
             HttpContext.RequestAborted);
 
-        var returnUrl = TempData["ReturnUrl"] as string;
+        var returnUrl = SafeReturnUrl.Normalize(
+            TempData["ReturnUrl"]?.ToString(),
+            interaction,
+            Url);
 
         TempData.Remove("OtpToken");
         TempData.Remove("OtpEmail");
 
-        if (!string.IsNullOrEmpty(returnUrl) && interaction.IsValidReturnUrl(returnUrl))
-        {
-            return LocalRedirect(returnUrl);
-        }
-
-        return RedirectToPage("/Index");
+        return SafeReturnUrl.Redirect(this, returnUrl);
     }
 
     public async Task<IActionResult> OnPostResendAsync()

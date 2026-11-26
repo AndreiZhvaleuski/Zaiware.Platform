@@ -27,7 +27,12 @@ public static class AvatarPlaceholder
             """;
     }
 
-    private static string Initials(string? displayName, string? username, string? email)
+    /// <summary>
+    /// Computes the initials shown in the placeholder: first and last word initials for a
+    /// display name, the first two username characters, the first email character, or
+    /// <c>?</c> when no value is available.
+    /// </summary>
+    public static string Initials(string? displayName, string? username, string? email)
     {
         if (!string.IsNullOrWhiteSpace(displayName))
         {

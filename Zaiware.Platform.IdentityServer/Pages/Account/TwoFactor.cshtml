@@ -14,12 +14,13 @@
     <p class="lead">Enter the 6-digit code from your authenticator app.</p>
   </header>
 
-  <div class="notice notice--error" role="alert" aria-live="polite" asp-validation-summary="ModelOnly"></div>
+  <div class="notice notice--error" id="twofactor-error" role="alert" asp-validation-summary="ModelOnly"></div>
 
   <form id="totp-form" method="post" asp-page="/Account/TwoFactor" asp-page-handler="Totp" data-busy-form novalidate>
     <input type="hidden" asp-for="Input.ReturnUrl">
     <fieldset class="code-inputs code-inputs--6" data-code-group data-code-pattern="numeric"
-              aria-describedby="totp-hint totp-error">
+              aria-describedby="totp-hint totp-error twofactor-error"
+              aria-invalid="@(Model.ErrorMessage is null ? "false" : "true")">
       <legend class="visually-hidden">Authenticator code, 6 digits</legend>
       @for (var index = 0; index < 6; index++)
       {
@@ -34,7 +35,7 @@
       }
     </fieldset>
     <p class="field__hint" id="totp-hint">The code changes every 30 seconds.</p>
-    <span class="field__error" id="totp-error" role="alert" aria-live="polite" asp-validation-for="Input.TotpCode"></span>
+    <span class="field__error" id="totp-error" role="alert" asp-validation-for="Input.TotpCode"></span>
 
     <div class="twofactor__actions">
       <button class="btn btn--primary btn--block" type="submit" id="verify-totp-btn">
@@ -53,8 +54,11 @@
         <label asp-for="Input.RecoveryCode">Recovery code</label>
         <input asp-for="Input.RecoveryCode" id="recovery-code" type="text"
                autocomplete="off" autocapitalize="characters" spellcheck="false"
-               inputmode="text" required aria-describedby="recovery-hint">
+               inputmode="text" required
+               aria-invalid="@(Model.ErrorMessage is null ? "false" : "true")"
+               aria-describedby="recovery-hint recovery-error twofactor-error">
         <p class="field__hint" id="recovery-hint">For example: ABCDE-FGHJK-MNP</p>
+        <span class="field__error" id="recovery-error" role="alert">@Model.ErrorMessage</span>
       </div>
       <div class="twofactor__actions">
         <button class="btn btn--secondary btn--block" type="submit" id="verify-recovery-btn">

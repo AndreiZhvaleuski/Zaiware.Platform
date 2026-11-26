@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>@ViewData["Title"] · Nimbus</title>
-  <script>
+  <script nonce="@Context.Items[SecurityHeadersMiddleware.NonceItemKey]">
     (function () {
       try {
         var stored = localStorage.getItem('theme');
@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="~/css/tokens.css" asp-append-version="true">
   <link rel="stylesheet" href="~/css/primitives.css" asp-append-version="true">
   <link rel="stylesheet" href="~/Zaiware.Platform.IdentityServer.styles.css" asp-append-version="true">
-  <script src="~/js/ui.js" defer></script>
+  <script src="~/js/ui.js" asp-append-version="true" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
