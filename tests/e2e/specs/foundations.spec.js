@@ -2,6 +2,9 @@
 
 const { test, expect } = require('@playwright/test');
 
+const AVATARS_PUBLIC_ENDPOINT = process.env.AVATARS_PUBLIC_ENDPOINT || 'http://localhost:9000';
+const AVATARS_ORIGIN = new URL(AVATARS_PUBLIC_ENDPOINT).origin;
+
 test.describe('ui foundations', () => {
   test('system theme applies before the first paint when no override is stored', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -105,6 +108,7 @@ test.describe('ui foundations', () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("form-action 'self'");
+    expect(csp).toContain(`img-src 'self' data: ${AVATARS_ORIGIN}`);
     expect(csp).toMatch(/script-src 'self' 'nonce-([^']+)'/);
 
     // Browsers hide the nonce content attribute after parsing; the IDL property keeps it.
@@ -140,6 +144,15 @@ test.describe('ui foundations', () => {
     await expect(skip).toHaveAttribute('href', '#main');
   });
 
+  test('the brand link meets the 44px target', async ({ page }) => {
+    await page.goto('/Account/Login');
+
+    const box = await page.locator('.brand').boundingBox();
+    expect(box).not.toBeNull();
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  });
+
   test('empty password submission exposes aria-invalid and its error reference', async ({ page }) => {
     await page.goto('/Account/Login');
     await page.locator('#signin-btn').click();
@@ -163,6 +176,30 @@ test.describe('ui foundations', () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator('#email-done')).toHaveText(passwordUser.email);
     await context.close();
+  });
+
+  test('signs in with the keyboard only', async ({ page }) => {
+    const { passwordUser } = require('../support/identities');
+    await page.goto('/Account/Login');
+
+    let reachedIdentifier = false;
+    for (let press = 0; press < 20; press += 1) {
+      await page.keyboard.press('Tab');
+      if (await page.locator('#identifier').evaluate((element) => element === document.activeElement)) {
+        reachedIdentifier = true;
+        break;
+      }
+    }
+
+    expect(reachedIdentifier).toBe(true);
+    await page.keyboard.type(passwordUser.email);
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#password')).toBeFocused();
+    await page.keyboard.type(passwordUser.password);
+    await page.keyboard.press('Enter');
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator('#email-done')).toHaveText(passwordUser.email);
   });
 
   test('code inputs keep a 44px touch target at a 320px viewport', async ({ page }) => {

@@ -39,8 +39,14 @@
           enctype="multipart/form-data" data-busy-form>
       <div class="field">
         <label asp-for="Avatar">Avatar</label>
-        <input asp-for="Avatar" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="avatar-hint">
+        <input asp-for="Avatar" type="file" accept="image/png,image/jpeg,image/webp"
+               aria-invalid="@(Model.AvatarError ? "true" : "false")"
+               aria-describedby="avatar-hint@(Model.AvatarError ? " avatar-error" : string.Empty)">
         <p class="field__hint" id="avatar-hint">PNG, JPEG, or WebP, up to 2 MB.</p>
+        @if (Model.AvatarError)
+        {
+          <span class="field__error" id="avatar-error" role="alert">@Model.AvatarErrorMessage</span>
+        }
       </div>
       <button class="btn btn--secondary" type="submit" id="avatar-upload-btn">
         <span>Upload avatar</span><span class="btn__spinner" aria-hidden="true"></span>

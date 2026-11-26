@@ -48,7 +48,9 @@ public sealed class IndexModel(
             profile is null ? null : TryGetString(profile, ProfileSchema.PreferredUsername.Code),
             profile is null ? null : TryGetString(profile, EmailCode));
 
-        Response.Headers.CacheControl = "private, max-age=60";
+        // The placeholder URL carries a cache-buster, but a same-second upload could reuse
+        // the previous URL. Never let a browser keep a placeholder that may already be stale.
+        Response.Headers.CacheControl = "no-store";
         return Content(svg, "image/svg+xml");
     }
 

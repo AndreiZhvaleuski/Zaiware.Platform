@@ -33,6 +33,15 @@ public sealed class AvatarStorageOptions
     public string Region { get; init; } = "us-east-1";
 
     /// <summary>
+    /// The scheme, host, and port the browser is sent to for presigned avatar reads. This is
+    /// the public endpoint when configured, otherwise the service endpoint (which is also
+    /// what the presigning client falls back to). The CSP uses this single origin so avatar
+    /// redirects are not blocked without allowing arbitrary image hosts.
+    /// </summary>
+    public string PublicOrigin =>
+        new Uri(PublicServiceUrl ?? ServiceUrl).GetLeftPart(UriPartial.Authority);
+
+    /// <summary>
     /// Parses and validates the injected connection string eagerly so a missing or
     /// malformed object-storage configuration fails at startup. <paramref name="publicEndpoint"/>
     /// (from <c>Avatars:PublicEndpoint</c>) overrides the optional connection-string value.

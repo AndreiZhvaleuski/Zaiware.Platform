@@ -6,8 +6,12 @@ namespace Zaiware.Platform.IdentityServer.Middleware;
 /// Adds the browser hardening headers used across the identity host and a per-request
 /// CSP nonce for the inline theme bootstrap in <c>_Layout</c>. The nonce is stored in
 /// <see cref="NonceItemKey"/> so Razor can put it on exactly that one script tag.
+/// The CSP <c>img-src</c> list includes the configured public avatar origin because the
+/// stable avatar route redirects browsers to a presigned URL on the RustFS endpoint.
 /// </summary>
-public sealed class SecurityHeadersMiddleware(RequestDelegate next)
+public sealed class SecurityHeadersMiddleware(
+    RequestDelegate next,
+    AvatarStorageOptions avatarStorageOptions)
 {
     /// <summary>The <see cref="HttpContext.Items"/> key holding the CSP nonce.</summary>
     public const string NonceItemKey = "csp-nonce";
@@ -33,7 +37,7 @@ public sealed class SecurityHeadersMiddleware(RequestDelegate next)
                 "object-src 'none'",
                 $"script-src 'self' 'nonce-{nonce}'",
                 "style-src 'self'",
-                "img-src 'self' data:",
+                $"img-src 'self' data: {avatarStorageOptions.PublicOrigin}",
                 "form-action 'self'",
             ]);
 

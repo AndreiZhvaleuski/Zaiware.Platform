@@ -55,6 +55,12 @@ public sealed class AccountModel(
     /// <summary>Whether the last POST was the password form; drives its aria-invalid state.</summary>
     public bool PasswordError { get; private set; }
 
+    /// <summary>Whether the last POST was the avatar form; drives its aria-invalid state.</summary>
+    public bool AvatarError { get; private set; }
+
+    /// <summary>The avatar-specific error rendered next to the file input.</summary>
+    public string? AvatarErrorMessage { get; private set; }
+
     public List<string> ErrorMessages { get; } = [];
 
     public sealed class SecurityInput
@@ -198,19 +204,19 @@ public sealed class AccountModel(
 
         if (Avatar is null || Avatar.Length == 0)
         {
-            ErrorMessages.Add("Choose an image to upload.");
+            AddAvatarError("Choose an image to upload.");
             return Page();
         }
 
         if (Avatar.Length > AvatarStorage.MaxBytes)
         {
-            ErrorMessages.Add("Avatars must be 2 MB or smaller.");
+            AddAvatarError("Avatars must be 2 MB or smaller.");
             return Page();
         }
 
         if (!AvatarStorage.IsAllowedContentType(Avatar.ContentType))
         {
-            ErrorMessages.Add("Choose a PNG, JPEG, or WebP image.");
+            AddAvatarError("Choose a PNG, JPEG, or WebP image.");
             return Page();
         }
 
@@ -218,7 +224,7 @@ public sealed class AccountModel(
         {
             if (!await AvatarSignature.HasExpectedSignatureAsync(signatureStream, HttpContext.RequestAborted))
             {
-                ErrorMessages.Add("That file does not look like a PNG, JPEG, or WebP image.");
+                AddAvatarError("That file does not look like a PNG, JPEG, or WebP image.");
                 return Page();
             }
         }
@@ -235,7 +241,7 @@ public sealed class AccountModel(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogError(exception, "Avatar upload failed for subject {SubjectId}", subjectId);
-            ErrorMessages.Add("The avatar could not be stored. Please try again.");
+            AddAvatarError("The avatar could not be stored. Please try again.");
             return Page();
         }
 
@@ -247,7 +253,7 @@ public sealed class AccountModel(
         if (!attributes.TryValidate(out var validated, out var errors)
             || await profileSelfService.TryUpdateAsync(subjectId, validated, HttpContext.RequestAborted) is null)
         {
-            ErrorMessages.Add($"The avatar was stored but the profile could not be updated: {string.Join(" ", errors ?? [])}");
+            AddAvatarError($"The avatar was stored but the profile could not be updated: {string.Join(" ", errors ?? [])}");
             return Page();
         }
 
@@ -412,6 +418,13 @@ public sealed class AccountModel(
         return RedirectToPage("/Account/RecoveryCodes");
     }
 
+    private void AddAvatarError(string message)
+    {
+        AvatarError = true;
+        AvatarErrorMessage = message;
+        ErrorMessages.Add(message);
+    }
+
     private async Task ReloadAsync(UserSubjectId subjectId)
     {
         var profile = await profileSelfService.TryGetAsync(subjectId, HttpContext.RequestAborted);
@@ -426,7 +439,7 @@ public sealed class AccountModel(
     private void Load(UserProfile profile, bool loadEditableFields = true)
     {
         Email = TryGetString(profile, EmailCode) ?? string.Empty;
-        PictureSrc = $"{AvatarRoutes.ForSubject(profile.SubjectId)}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        PictureSrc = $"{AvatarRoutes.ForSubject(profile.SubjectId)}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
 
         if (loadEditableFields)
         {

@@ -5,9 +5,39 @@ const { accountUser, passwordUser } = require('../support/identities');
 const { signIn } = require('../support/flows');
 
 const IDENTITY_BASE_URL = process.env.IDENTITY_BASE_URL || 'https://localhost:5001';
+// A genuinely valid 16x16 RGBA PNG (quadrant pattern) generated with zlib/CRC32 and
+// verified by decoding it in Chromium. The previous 1x1 fixture had a bad IDAT CRC.
 const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lW+0WQAAAABJRU5ErkJggg==',
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAIElEQVR42mOQ8b/xHx8mBBhGDRgWBhBSQMiCUQOGhQEAjpofLgaVi1oAAAAASUVORK5CYII=',
   'base64');
+
+function watchForCspErrors(page) {
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error'
+        && /content security policy|refused to load/i.test(message.text())) {
+      errors.push(message.text());
+    }
+  });
+  return errors;
+}
+
+async function expectImageDecoded(page) {
+  await expect.poll(
+    () => page.locator('.account-avatar__image').evaluate((image) =>
+      image.complete && image.naturalWidth > 0 && image.naturalHeight > 0),
+    { timeout: 15_000 },
+  ).toBe(true);
+
+  const size = await page.locator('.account-avatar__image').evaluate((image) => ({
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+  }));
+
+  expect(size.width).toBeGreaterThan(0);
+  expect(size.height).toBeGreaterThan(0);
+}
+
 
 test.describe('avatars', () => {
   test('a user without an avatar sees the initials placeholder', async ({ page }) => {
@@ -19,12 +49,18 @@ test.describe('avatars', () => {
 
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']).toContain('image/svg+xml');
+    // A same-second upload can reuse the cache-buster; the placeholder must never be stored.
+    expect((response.headers()['cache-control'] || '').toLowerCase()).toContain('no-store');
     expect(await response.text()).toContain('<svg');
   });
 
-  test('a valid upload is stored and served through the stable route', async ({ page }) => {
+  test('a valid upload is stored, served through the stable route, and rendered by the browser', async ({ page }) => {
+    const cspErrors = watchForCspErrors(page);
     await signIn(page, accountUser.email, accountUser.password);
     await page.goto('/Account');
+
+    await expect(page.locator('#Avatar')).toHaveAttribute('aria-invalid', 'false');
+    await expect(page.locator('#Avatar')).toHaveAttribute('aria-describedby', 'avatar-hint');
 
     await page.locator('#Avatar').setInputFiles({
       name: 'avatar.png',
@@ -41,6 +77,17 @@ test.describe('avatars', () => {
     const response = await page.request.get(new URL(src, IDENTITY_BASE_URL).toString());
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']).toContain('image/png');
+
+    // The actual <img> must decode the presigned redirect target; page.request would bypass
+    // CSP and hide a blocked image, so assert the DOM element's natural size instead.
+    await expectImageDecoded(page);
+    const decoded = await page.locator('.account-avatar__image').evaluate((image) => ({
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+    }));
+    expect(decoded.width).toBe(16);
+    expect(decoded.height).toBe(16);
+    expect(cspErrors).toEqual([]);
 
     // The stable route redirects to a short-lived presigned URL for the subject's key.
     const redirect = await page.request.get(new URL(src, IDENTITY_BASE_URL).toString(), {
@@ -132,6 +179,10 @@ test.describe('avatars', () => {
     await page.locator('#avatar-upload-btn').click();
 
     await expect(page.locator('.notice--error')).toContainText('does not look like');
+    await expect(page.locator('#Avatar')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#Avatar')).toHaveAttribute('aria-describedby', /avatar-hint/);
+    await expect(page.locator('#Avatar')).toHaveAttribute('aria-describedby', /avatar-error/);
+    await expect(page.locator('#avatar-error')).toContainText('does not look like');
   });
 
   test('unauthenticated avatar and upload requests bounce to sign-in', async ({ browser, page }) => {
