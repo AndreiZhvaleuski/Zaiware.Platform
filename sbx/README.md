@@ -520,8 +520,8 @@ sbx env exec -- grep -q playwright /home/agent/.config/opencode/AGENTS.md
 # After confirming the domain is absent from sbx policy ls, this must fail with
 # a policy/proxy error. Substitute another ungranted domain if example.com is allowed.
 sbx env exec -- bash -c 'PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --wait-for-timeout=1000 https://example.com /tmp/pw-denied.png'
-# No display server: headed mode must fail rather than opening a window.
-sbx env exec -- bash -c 'PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --headed file:///tmp/pw-smoke-site/index.html /tmp/pw-headed.png'
+# No display server: a real headed browser launch must fail rather than opening a window.
+sbx env exec -- bash -lc 'PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright node -e "require(\"@playwright/test\").chromium.launch({headless:false}).then(b=>b.close()).catch(e=>{console.error(e.message);process.exit(1)})"'
 ```
 
 The version must be `1.61.1`, the module must resolve in a login shell, the
