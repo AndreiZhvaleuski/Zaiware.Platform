@@ -18,6 +18,7 @@ placeholder for the real value on outbound requests.
 | `kits/aspire/aspire-context.md` | Agent context: HTTP launch profile, configured environment, and Aspire commands. |
 | `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node) and its GitHub runtime access. |
 | `kits/openspec/openspec-context.md` | Agent context: project artifacts, workflow skills, and init guidance. |
+| [`docker.io/sbx/playwright:1.61.1`](#playwright) | [Published Playwright mixin](#playwright): `playwright`, `@playwright/test`, headless Chromium, shared browser path, and scoped network grants. |
 | `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), persistent OpenCode data (`volume@1`), and the OpenCode `AGENTS.md` context profile (`agent-context@1`). |
 | `kits/opencode-server/opencode-server-context.md` | Injected global `AGENTS.md` profile: server-mode, clone-only workspace, and Git handoff workflow. |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
@@ -153,7 +154,7 @@ pre-declared, so approval is normally silent; the mount appears in the plan.
 
 ## Agent context and Git handoff
 
-Each local kit contributes focused agent context through `agent-context@1`:
+Each selected kit contributes focused agent context through `agent-context@1`:
 
 - `provider-keys`: `OPENCODE_API_KEY` is a proxy-managed placeholder; never
   persist a real key or run `/connect`.
@@ -163,14 +164,21 @@ Each local kit contributes focused agent context through `agent-context@1`:
   start, inspect, and stop through the Aspire CLI.
 - `openspec`: use the workflow skills in `.agents/skills/openspec-*` and keep
   project artifacts under `openspec/`.
+- `playwright`: `playwright` and `@playwright/test` are global; only headless
+  Chromium is provisioned. Preserve `/opt/ms-playwright`; version `1.61.1`
+  exports `PLAYWRIGHT_BROWSERS_PATH` and `NODE_PATH` only for login shells, so
+  use `bash -lc` or set the browser path explicitly in non-login shells. Grant
+  external sites separately.
 - `opencode-server`: use server mode, edit only the clone, and commit completed
   work for host retrieval.
 
-The four ordinary tool kits use the `agent-context@1` body-only form: their
+The five ordinary tool kits (`provider-keys`, `dotnet`, `aspire`, `openspec`, and
+the published `playwright` kit) use the `agent-context@1` body-only form: their
 config contains only `contentFile`. The frontend stages each body under
 `/usr/share/sandbox/kit/<kit>/` and adds a kit index entry; ordinary bodies are
-not written as global instruction files. `opencode-server` additionally owns the
-explicit global profile: its `agent-context@1` entry writes
+not written as global instruction files. In particular, the published kit stages
+`/usr/share/sandbox/kit/playwright/playwright-context.md`. `opencode-server`
+additionally owns the explicit global profile: its `agent-context@1` entry writes
 `/home/agent/.config/opencode/AGENTS.md` from
 [`opencode-server-context.md`](kits/opencode-server/opencode-server-context.md).
 The mechanism does not create a repository-root `AGENTS.md`.
@@ -450,6 +458,94 @@ first-run telemetry note. Restart OpenCode after a recreation so it reloads
 `.agents/skills`; then `/openspec-propose` (or asking the agent to use the
 matching skill) is available.
 
+## Playwright
+
+The environment pins Docker's published, verified
+`docker.io/sbx/playwright:1.61.1` mixin. It provides the global `playwright`
+CLI, `@playwright/test`, and headless Chromium for the agent without requiring a
+project-local Node install. The kit adds a ~292 MB amd64 image layer (~327 MB on
+arm64), and every create re-runs its install hook to add Node when needed and
+install Chromium's native system libraries. Only the image pull is cached after
+the first create; the apt work still runs on each recreation.
+
+The shared browser directory is `/opt/ms-playwright`, and it is writable by the
+agent. Version `1.61.1` exports `PLAYWRIGHT_BROWSERS_PATH` and `NODE_PATH` from
+`/etc/profile.d/playwright-env.sh`, so login shells receive them but non-login
+shells do not. That includes bare `sbx env exec` commands and the agent's default
+non-login Bash shell: `BASH_ENV` points to an empty
+`/etc/sandbox-persistent.sh`, which does not source `profile.d`. Use `bash -lc`
+when a command needs the login-shell environment, or set
+`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright` explicitly for browser commands.
+Do not duplicate these variables in `sbxenv.yaml` or another local kit.
+
+A project-local Playwright version must use a matching browser. Use the global
+`playwright install chromium` command, or a project-local
+`./node_modules/.bin/playwright` after installing that project's dependencies;
+the browser CDN is allowed at runtime. This `1.61.1` kit installs Node but not
+npm/npx, so `npx playwright ...` is not available unless npm is installed
+separately. The published context's `npx` examples do not apply to this pin.
+
+Only headless Chromium and its headless shell are provisioned. There is no
+display server, so headed mode, UI mode, and codegen are unsupported. Headless
+screenshots, PDFs, traces, and videos work; Firefox and WebKit are not included.
+
+The kit's install policy allows the Debian/DHI and related package repositories
+needed by `playwright install-deps chromium`: `deb.debian.org`, `dhi.io`,
+`archive.ubuntu.com`, `security.ubuntu.com`, `ports.ubuntu.com`,
+`download.docker.com`, and `cli.github.com`. Its runtime policy allows
+`cdn.playwright.dev`, `playwright.download.prss.microsoft.com`, and
+`storage.googleapis.com` for browser assets. `localhost` continues to work
+through the sandbox's normal proxy bypass. These grants do **not** give access
+to arbitrary sites under test: grant each external site's domain separately,
+and never add a wildcard `NO_PROXY` override.
+
+Kit changes are create-time only. After changing the reference, run
+`sbx env plan`, retrieve any sandbox-only commits on the host, then run
+`sbx env rm` and `sbx env create`. `sbx env exec` or attaching does not compose
+the kit or run its install hook.
+
+Verify after recreation:
+
+```powershell
+sbx env exec -- playwright --version
+sbx env exec -- bash -lc 'node -e "require(\"@playwright/test\"); console.log(\"resolved\")"'
+sbx env exec -- bash -lc 'echo "$PLAYWRIGHT_BROWSERS_PATH"; test -w /opt/ms-playwright && echo writable'
+# Known 1.61.1 limitation: both variables are unset in a non-login shell.
+sbx env exec -- bash -c 'printf "non-login PBP=%s NODE_PATH=%s\n" "${PLAYWRIGHT_BROWSERS_PATH:-unset}" "${NODE_PATH:-unset}"'
+# Serve localhost and render it with the shared browser path explicitly set.
+sbx env exec -- bash -c 'mkdir -p /tmp/pw-smoke-site; printf "<title>Playwright smoke</title><h1>headless Chromium</h1>\n" > /tmp/pw-smoke-site/index.html; python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/pw-smoke-site >/tmp/pw-smoke-server.log 2>&1 & server=$!; trap "kill $server" EXIT; sleep 0.5; PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --wait-for-timeout=1000 http://127.0.0.1:8765/ /tmp/pw-smoke.png && test -s /tmp/pw-smoke.png && head -c 8 /tmp/pw-smoke.png | od -An -tx1 | grep -q "89 50 4e 47"'
+sbx env exec -- test -s /usr/share/sandbox/kit/playwright/playwright-context.md
+sbx env exec -- bash -c 'ctx=/usr/share/sandbox/kit/playwright/playwright-context.md; grep -q "@playwright/test" "$ctx" && grep -q "/opt/ms-playwright" "$ctx" && grep -qi "headless" "$ctx" && grep -qiE "external|policy" "$ctx"'
+sbx env exec -- grep -q playwright /home/agent/.config/opencode/AGENTS.md
+# After confirming the domain is absent from sbx policy ls, this must fail with
+# a policy/proxy error. Substitute another ungranted domain if example.com is allowed.
+sbx env exec -- bash -c 'PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --wait-for-timeout=1000 https://example.com /tmp/pw-denied.png'
+# No display server: headed mode must fail rather than opening a window.
+sbx env exec -- bash -c 'PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright screenshot --headed file:///tmp/pw-smoke-site/index.html /tmp/pw-headed.png'
+```
+
+The version must be `1.61.1`, the module must resolve in a login shell, the
+browser path must be `/opt/ms-playwright`, and the localhost smoke image must be
+a non-empty PNG whose first bytes are `89 50 4e 47`. The non-login probe should
+report both variables as `unset`; browser commands must set the shared path
+explicitly or run in a login shell.
+
+Do not replace the pin with `latest`. A future move to
+`docker.io/sbx/playwright:1.65.1-0` is a separate upgrade. Its `version` setting
+is a build-phase argument baked into the published image, so consumers select
+the release by tag rather than passing `args.version`. Use the bare reference
+below in an isolated probe:
+
+```yaml
+- docker.io/sbx/playwright:1.65.1-0
+```
+
+That descriptor declares `requires: [deb/apt, deb/bash, deb/coreutils, deb/grep]`,
+which this environment has not probed. It also changes the packaging to include
+npm and expose the environment to non-login Bash shells. Verify the dependency
+contract in an isolated sandbox before changing the pin, then recreate and
+rerun the checks.
+
 ## Verify
 
 ```powershell
@@ -474,18 +570,18 @@ curl.exe -s -o NUL -w "auth %{http_code}`n" -u "opencode:$pw" http://127.0.0.1:4
 curl.exe -s -o NUL -w "anon %{http_code}`n" http://127.0.0.1:4096/openapi.json
 Remove-Variable pw
 
-# Every local kit's context is staged, and the generated profile indexes it:
-sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec opencode-server; do test -s "/usr/share/sandbox/kit/$k/$k-context.md" || { echo "missing $k"; exit 1; }; done'
-sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec opencode-server; do grep -q "$k" /home/agent/.config/opencode/AGENTS.md || { echo "missing index $k"; exit 1; }; done'
+# Every selected kit's context is staged, and the generated profile indexes it:
+sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec playwright opencode-server; do test -s "/usr/share/sandbox/kit/$k/$k-context.md" || { echo "missing $k"; exit 1; }; done'
+sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec playwright opencode-server; do grep -q "$k" /home/agent/.config/opencode/AGENTS.md || { echo "missing index $k"; exit 1; }; done'
 sbx env exec -- test -s /home/agent/.config/opencode/AGENTS.md
 sbx env exec -- cat /home/agent/.config/opencode/AGENTS.md
 ```
 
 The `AGENTS.md` output must contain a kit index/reference for `provider-keys`,
-`dotnet`, `aspire`, `openspec`, and `opencode-server`. The staged contexts must
-contain the credential, SDK, Aspire, OpenSpec, and server/clone/Git-handoff
-guidance respectively. This mechanism does not create a repository-root
-`AGENTS.md`.
+`dotnet`, `aspire`, `openspec`, `playwright`, and `opencode-server`. The staged
+contexts must contain the credential, SDK, Aspire, OpenSpec, headless-browser,
+and server/clone/Git-handoff guidance respectively. This mechanism does not
+create a repository-root `AGENTS.md`.
 
 If `anon` is not `401`, the server either did not start or has no password.
 Check that `..\zaiware-secrets\server-password` exists on the host and is

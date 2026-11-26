@@ -24,6 +24,15 @@ volume retention across `sbx env rm` requires v0.50+.
 - `--detach` starts only the sandbox; it cannot be combined with arguments
   after `--`.
 
+### Published kits
+
+Before creating a local kit, check whether a verified published mixin already
+covers the tool. Prefer that mixin, pin it by an exact version tag or digest,
+and inspect its `provides`, arguments, capabilities, and `requires` before
+adoption. Verify it against this workload through a plan and full recreation;
+do not create a duplicate local kit or copy its image layer into this repo.
+Record evidence only after that verification passes.
+
 ## 2. Install pattern
 
 Every tool gets one `/usr/local/bin/<tool>` symlink. The real files stay at the
@@ -189,8 +198,9 @@ capabilities:
 
 OpenCode reads global instructions from
 `/home/agent/.config/opencode/AGENTS.md`; `opencode-server` is its agent mixin,
-so it declares that explicit destination. The four ordinary tool kits
-(`provider-keys`, `dotnet`, `aspire`, `openspec`) use the body-only form.
+so it declares that explicit destination. The local ordinary tool kits
+(`provider-keys`, `dotnet`, `aspire`, `openspec`) and published body-only kits
+such as `playwright` use the body-only form.
 
 The frontend stages `contentFile` under `/usr/share/sandbox/kit/<kit>/` and adds
 a kit index entry pointing at the staged file. Do not copy the same file in the

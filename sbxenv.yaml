@@ -73,6 +73,9 @@ kits:
   # OpenSpec CLI (standalone binary, no Node). Project artifacts under
   # openspec/ and .agents/skills come from `openspec init` in the repo.
   - ./sbx/kits/openspec
+  # Published, verified Docker kit: Playwright CLI, @playwright/test, and
+  # headless Chromium. Must stay pinned; see sbx/README.md before changing it.
+  - docker.io/sbx/playwright:1.61.1
 
 # Publish the API server on host loopback only, explicitly.
 ports:
