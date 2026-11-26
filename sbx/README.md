@@ -368,9 +368,15 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   `[::1]`, which the sandbox proxy does not bypass. `127.0.0.1` and
   `localhost` are already in the sandbox's `NO_PROXY`. Do not add `[::1]`:
   some clients parse it as a regex and can lose their proxy.
-- Transport: `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is exported because the
-  image ships no trusted ASP.NET Core HTTPS development certificate. Use the
-  `http` launch profile; the sandbox publishes loopback ports only.
+- Transport: `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is exported so the
+  AppHost's `http` launch profile needs no certificate negotiation. Use the
+  `http` profile for the dashboard; the sandbox publishes loopback ports only.
+- Certificates: the kit installs `libnss3-tools` (`certutil`) at create and, on
+  each boot, creates and trusts a per-sandbox ASP.NET Core HTTPS development
+  certificate when none is trusted. Nothing is baked into the image, so each
+  sandbox has its own private key. `SSL_CERT_DIR` includes
+  `~/.aspnet/dev-certs/trust` so OpenSSL clients and the DCP check use it. A
+  freshly created sandbox reports no certificate warnings from `aspire doctor`.
 - Telemetry: `ASPIRE_CLI_TELEMETRY_OPTOUT=true`.
 - Updates: the CLI is image-managed. Bump `aspireVersion` and recreate. An
   in-sandbox `aspire update` changes only that sandbox and is lost on the next
@@ -379,9 +385,12 @@ release archive's SHA-512; the version is pinned by `aspireVersion`.
   has no uninstall command.
 
 The build downloads the CLI from `aspire.dev` and the matching GitHub release
-on the host, so it needs host network access. The sandbox itself needs no extra
-grants from this kit: the dotnet kit grants NuGet restore, and the Docker
-daemon pulls the dashboard and database images.
+on the host, so it needs host network access. At create, the install hook
+apt-installs `libnss3-tools` from `deb.debian.org`, so the kit's install-phase
+network policy grants that host; this follows the published Playwright kit's
+pattern for apt packages, which cannot travel in the overlay. Runtime egress is
+unchanged: the dotnet kit grants NuGet restore, and the Docker daemon pulls the
+dashboard and database images.
 
 Verify after the next sandbox creation:
 
@@ -390,9 +399,10 @@ sbx env exec -- aspire --version
 sbx env exec -- bash -lc 'cd "$WORKSPACE_DIR" && aspire doctor'
 ```
 
-`aspire doctor` may warn that the CLI is out of date, and about the missing
-trusted developer certificate/`certutil`. Both are expected: updates are kit
-rebuilds, and the image ships no trusted ASP.NET Core development certificate.
+`aspire doctor` may warn that the CLI is out of date; that is expected, because
+updates are kit rebuilds. The certificate and `certutil` warnings are no longer
+expected: a fresh create installs `certutil` and provisions a trusted
+per-sandbox certificate, so doctor should report 0 warnings and 0 failures.
 
 Run the AppHost from the workspace root:
 
