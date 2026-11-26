@@ -8,7 +8,7 @@
 # the same Aspire release family in Zaiware.Platform.AppHost.csproj.
 FROM debian:trixie-slim AS build
 
-ARG ASPIRE_VERSION=13.6.4
+ARG ASPIRE_VERSION=17.0.0
 
 # Build-only. Docker builds run as root with HOME=/root; the installers choose
 # their default paths from HOME. Do not set this at runtime.
