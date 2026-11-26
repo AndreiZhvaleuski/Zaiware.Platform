@@ -48,6 +48,11 @@ test.describe('account security', () => {
 
       const codesA = await readRecoveryCodes(page);
       await expect(page.locator('#totp-status')).toContainText('Enabled');
+      await expect(page.locator('#recovery-count')).toHaveText(String(codesA.length));
+
+      // The codes are shown exactly once; a later visit returns to the account page.
+      await page.goto('/Account/RecoveryCodes');
+      await expect(page).toHaveURL(/\/Account$/);
 
       // Sign out and sign in again: the challenge must appear and complete.
       await signOut(page);
