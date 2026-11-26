@@ -1,0 +1,51 @@
+@page
+@model Zaiware.Platform.IdentityServer.Pages.Account.TotpSetupModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Set up two-factor authentication";
+}
+
+<div class="card totp-setup">
+  <a class="back-link" asp-page="/Account/Account">&#8592; Back to account</a>
+
+  <header class="card__header">
+    <h1 id="title" class="card__title">Set up two-factor authentication</h1>
+    <p class="lead">Scan the QR code with your authenticator app, then enter the current 6-digit code to confirm.</p>
+  </header>
+
+  @if (Model.ErrorMessages.Count > 0)
+  {
+    <div class="notice notice--error" role="alert" aria-live="polite">
+      <ul>
+        @foreach (var error in Model.ErrorMessages)
+        {
+          <li>@error</li>
+        }
+      </ul>
+    </div>
+  }
+
+  <div class="totp-setup__qr">
+    <img src="@Model.QrCodeDataUri" alt="QR code for your authenticator app" width="220" height="220">
+  </div>
+
+  <p class="field__hint">Can't scan it? Enter this key manually:</p>
+  <p class="totp-setup__key"><code id="totp-manual-key">@Model.ManualKey</code></p>
+
+  <form method="post" asp-page="/Account/TotpSetup" data-busy-form novalidate>
+    <div class="field">
+      <label asp-for="Code">Verification code</label>
+      <input asp-for="Code" id="totp-code" type="text" inputmode="numeric"
+             autocomplete="one-time-code" maxlength="7" pattern="[0-9 ]{6,7}"
+             required aria-describedby="totp-code-hint code-error">
+      <p class="field__hint" id="totp-code-hint">Six digits from your authenticator app.</p>
+      <span class="field__error" id="code-error" role="alert" asp-validation-for="Code"></span>
+    </div>
+    <div class="totp-setup__actions">
+      <button class="btn btn--primary btn--block" type="submit" id="totp-confirm-btn">
+        <span>Verify and enable</span><span class="btn__spinner" aria-hidden="true"></span>
+      </button>
+    </div>
+  </form>
+</div>

@@ -290,12 +290,22 @@ public static class DevelopmentUserSeed
         string normalizedEmail,
         CancellationToken ct)
     {
+        var current = await authenticators.TryGetAsync(subjectId, ct);
+
         if (string.IsNullOrWhiteSpace(secret))
         {
+            // A Development identity without a configured secret must not keep an enrollment
+            // from an earlier exploratory session: the next run has to start challenge-free.
+            if (current is not null)
+            {
+                foreach (var device in current.TotpDeviceNames.ToArray())
+                {
+                    _ = await authenticators.TryRemoveTotpDeviceAsync(subjectId, device, ct);
+                }
+            }
+
             return;
         }
-
-        var current = await authenticators.TryGetAsync(subjectId, ct);
 
         if (current?.TotpDeviceNames.Contains(TotpDeviceName.Default) == true)
         {

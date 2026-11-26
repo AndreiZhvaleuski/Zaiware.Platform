@@ -17,4 +17,19 @@ module.exports = {
     email: process.env.E2E_DEMO_EMAIL || 'demo@zaiware.dev',
     password: process.env.E2E_DEMO_PASSWORD || 'Demo-Password-2026!',
   },
+  accountUser: {
+    username: process.env.E2E_ACCOUNT_USERNAME || 'e2e-account',
+    email: process.env.E2E_ACCOUNT_EMAIL || 'e2e-account@zaiware.dev',
+    password: process.env.E2E_ACCOUNT_PASSWORD || 'E2e-Account-Password-2026!',
+  },
+  securityUser: {
+    username: process.env.E2E_SECURITY_USERNAME || 'e2e-security',
+    email: process.env.E2E_SECURITY_EMAIL || 'e2e-security@zaiware.dev',
+    password: process.env.E2E_SECURITY_PASSWORD || 'E2e-Security-Password-2026!',
+  },
+  passwordChangeUser: {
+    username: process.env.E2E_PASSWORD_CHANGE_USERNAME || 'e2e-password-change',
+    email: process.env.E2E_PASSWORD_CHANGE_EMAIL || 'e2e-password-change@zaiware.dev',
+    password: process.env.E2E_PASSWORD_CHANGE_PASSWORD || 'E2e-Password-Change-2026!',
+  },
 };

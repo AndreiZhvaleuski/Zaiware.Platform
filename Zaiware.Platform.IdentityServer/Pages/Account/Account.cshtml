@@ -1,0 +1,165 @@
+@page "/Account"
+@model Zaiware.Platform.IdentityServer.Pages.Account.AccountModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Account";
+    ViewData["Wide"] = true;
+}
+
+<h1>Account</h1>
+<p class="lead">Manage your profile and sign-in security.</p>
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+  <div class="notice notice--success" role="status" aria-live="polite">@Model.SuccessMessage</div>
+}
+
+@if (Model.ErrorMessages.Count > 0)
+{
+  <div class="notice notice--error" role="alert" aria-live="polite">
+    <ul>
+      @foreach (var error in Model.ErrorMessages)
+      {
+        <li>@error</li>
+      }
+    </ul>
+  </div>
+}
+
+<section class="card account-section" aria-labelledby="profile-heading">
+  <header class="card__header">
+    <h2 id="profile-heading" class="card__title">Profile</h2>
+    <p class="muted">Your username is used to sign in; your display name appears on your account.</p>
+  </header>
+
+  <div class="account-avatar">
+    <img class="account-avatar__image" src="@Model.PictureSrc" alt="Your avatar" width="96" height="96">
+    <form class="account-avatar__form" method="post" asp-page="/Account/Account" asp-page-handler="Avatar"
+          enctype="multipart/form-data" data-busy-form>
+      <div class="field">
+        <label asp-for="Avatar">Avatar</label>
+        <input asp-for="Avatar" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="avatar-hint">
+        <p class="field__hint" id="avatar-hint">PNG, JPEG, or WebP, up to 2 MB.</p>
+      </div>
+      <button class="btn btn--secondary" type="submit" id="avatar-upload-btn">
+        <span>Upload avatar</span><span class="btn__spinner" aria-hidden="true"></span>
+      </button>
+    </form>
+  </div>
+
+  <hr class="divider">
+
+  <form method="post" asp-page="/Account/Account" asp-page-handler="Profile" data-busy-form novalidate>
+    <div class="field">
+      <label asp-for="Profile.Username">Username</label>
+      <input asp-for="Profile.Username" id="account-username" type="text" autocomplete="username"
+             autocapitalize="none" spellcheck="false" required
+             aria-describedby="username-hint username-error"
+             aria-invalid="@(ViewData.ModelState["Profile.Username"]?.Errors.Count > 0 ? "true" : "false")">
+      <p class="field__hint" id="username-hint">Letters, numbers, dots, underscores, or hyphens. Case-insensitive.</p>
+      <span class="field__error" id="username-error" role="alert" asp-validation-for="Profile.Username"></span>
+    </div>
+
+    <div class="field">
+      <label asp-for="Profile.DisplayName">Display name</label>
+      <input asp-for="Profile.DisplayName" id="account-display-name" type="text" autocomplete="name" required
+             aria-describedby="display-name-error"
+             aria-invalid="@(ViewData.ModelState["Profile.DisplayName"]?.Errors.Count > 0 ? "true" : "false")">
+      <span class="field__error" id="display-name-error" role="alert" asp-validation-for="Profile.DisplayName"></span>
+    </div>
+
+    <div class="field">
+      <span class="field__label">Email</span>
+      <p class="account-static" id="account-email">@Model.Email</p>
+      <p class="field__hint">Your email is used for one-time codes and cannot be changed here.</p>
+    </div>
+
+    <div class="account-actions">
+      <button class="btn btn--primary" type="submit" id="profile-save-btn">
+        <span>Save profile</span><span class="btn__spinner" aria-hidden="true"></span>
+      </button>
+    </div>
+  </form>
+</section>
+
+<section class="card account-section" aria-labelledby="security-heading">
+  <header class="card__header">
+    <h2 id="security-heading" class="card__title">Security</h2>
+    <p class="muted">Password and two-factor authentication settings.</p>
+  </header>
+
+  <div class="security-block">
+    <h3>Password</h3>
+    <p class="muted">
+      @(Model.HasPassword
+        ? "Change your password by confirming the current one."
+        : "Set a password to sign in without waiting for an email code.")
+    </p>
+
+    <form method="post" asp-page="/Account/Account" asp-page-handler="Password" data-busy-form novalidate>
+      @if (Model.HasPassword)
+      {
+        <div class="field">
+          <label for="current-password">Current password</label>
+          <input id="current-password" name="Security.CurrentPassword" type="password"
+                 autocomplete="current-password" required>
+        </div>
+      }
+      <div class="field">
+        <label for="new-password">New password</label>
+        <input id="new-password" name="Security.NewPassword" type="password"
+               autocomplete="new-password" required aria-describedby="password-policy">
+        <p class="field__hint" id="password-policy">Use at least 15 characters. A longer passphrase is easiest to remember.</p>
+      </div>
+      <div class="field">
+        <label for="confirm-password">Confirm new password</label>
+        <input id="confirm-password" name="Security.ConfirmPassword" type="password"
+               autocomplete="new-password" required>
+      </div>
+      <div class="account-actions">
+        <button class="btn btn--primary" type="submit" id="password-save-btn">
+          <span>@(Model.HasPassword ? "Change password" : "Set password")</span><span class="btn__spinner" aria-hidden="true"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <hr class="divider">
+
+  <div class="security-block">
+    <h3>Two-factor authentication</h3>
+    <p class="muted">Require a code from an authenticator app after your password.</p>
+    <p id="totp-status">
+      <span class="badge @(Model.TotpEnabled ? "badge--success" : string.Empty)">
+        @(Model.TotpEnabled ? "Enabled" : "Not enabled")
+      </span>
+    </p>
+
+    @if (Model.TotpEnabled)
+    {
+      <form method="post" asp-page="/Account/Account" asp-page-handler="DisableTotp">
+        <button class="btn btn--danger" type="submit" id="disable-totp-btn">Disable two-factor authentication</button>
+      </form>
+
+      <h3 class="security-subheading">Recovery codes</h3>
+      <p class="muted">
+        <strong id="recovery-count">@Model.RecoveryCodeCount</strong> unused
+        @(Model.RecoveryCodeCount == 1 ? "code" : "codes") remaining. Generating a new set invalidates all older codes.
+      </p>
+      <form method="post" asp-page="/Account/Account" asp-page-handler="RegenerateRecoveryCodes">
+        <button class="btn btn--secondary" type="submit" id="regenerate-codes-btn">Generate new recovery codes</button>
+      </form>
+    }
+    else
+    {
+      <a class="btn btn--secondary" asp-page="/Account/TotpSetup" id="enable-totp-link">Enable two-factor authentication</a>
+    }
+  </div>
+</section>
+
+<div class="account-footer">
+  <form method="post" asp-page="/Account/Logout">
+    <button class="btn btn--secondary" type="submit" id="account-signout-btn">Sign out</button>
+  </form>
+</div>

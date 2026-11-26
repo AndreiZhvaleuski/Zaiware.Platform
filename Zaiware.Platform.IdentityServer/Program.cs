@@ -26,6 +26,12 @@ _ = builder.AddObservability()
     });
 
 var smtpOptions = builder.Configuration.GetRequiredSmtpOtpDispatcherOptions();
+var avatarOptions = AvatarStorageOptions.FromConnectionString(
+    builder.Configuration.GetRequiredConnectionString("Avatars"));
+
+builder.Services.AddSingleton(avatarOptions);
+builder.Services.AddSingleton(avatarOptions.CreateClient());
+builder.Services.AddSingleton<AvatarStorage>();
 
 _ = builder.Services
     .AddNpgsqlDataSource(builder.Configuration.GetRequiredConnectionString("IdentityServer"))
@@ -38,15 +44,33 @@ _ = builder.Services
     .AddConfigurationStorage()
     .AddOperationalStorage()
     .AddUserManagement(userManagement => userManagement
-        .Authentication(authentication => authentication.UseSmtpOtpDispatcher(options =>
+        .Authentication(authentication =>
         {
-            options.Host = smtpOptions.Host;
-            options.Port = smtpOptions.Port;
-            options.EnableSsl = smtpOptions.EnableSsl;
-            options.FromEmail = smtpOptions.FromEmail;
-            options.FromName = smtpOptions.FromName;
-            options.Domain = smtpOptions.Domain;
-        })))
+            if (builder.Environment.IsDevelopment())
+            {
+                // Keep the throttling mechanism in place but make repeated end-to-end
+                // attempts practical; production keeps the Duende defaults.
+                authentication.Configure(options =>
+                {
+                    options.Throttling.MaxFailedAttempts = 10;
+                    options.Throttling.ThrottleDuration = TimeSpan.FromSeconds(10);
+                    options.Throttling.MaxAttemptsPerWindow = 50;
+                    options.Throttling.VelocityWindow = TimeSpan.FromSeconds(30);
+                    options.Throttling.VelocityThrottleDuration = TimeSpan.FromSeconds(1);
+                    options.Throttling.EscalatingThrottleDurations = [];
+                });
+            }
+
+            authentication.UseSmtpOtpDispatcher(options =>
+            {
+                options.Host = smtpOptions.Host;
+                options.Port = smtpOptions.Port;
+                options.EnableSsl = smtpOptions.EnableSsl;
+                options.FromEmail = smtpOptions.FromEmail;
+                options.FromName = smtpOptions.FromName;
+                options.Domain = smtpOptions.Domain;
+            });
+        }))
     .AddInMemoryDataExtensionSchemas([ProfileSchema.UserProfile]);
 
 builder.Services.AddInviteOnlyOtpLogin();
@@ -96,12 +120,25 @@ _ = app.UseIdentityServer();
 
 // Sign-in and account responses must never be restored from browser history:
 // they can contain one-time codes, recovery codes, or signed-in state.
+// Fingerprinted static assets are immutable; the fingerprint changes with the content.
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/Account"))
     {
         context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
         context.Response.Headers.Pragma = "no-cache";
+    }
+    else if (FingerprintedAssets.Path().IsMatch(context.Request.Path))
+    {
+        context.Response.OnStarting(() =>
+        {
+            if (context.Response.StatusCode == StatusCodes.Status200OK)
+            {
+                context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     await next(context);

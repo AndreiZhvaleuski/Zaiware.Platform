@@ -85,11 +85,11 @@ Implementation must consult the Duende MCP samples (FullSample, PasswordRegistra
 
 Dev-stage system. Sequence: package refresh (with full run verification) → foundations → profile schema + seed → sign-in flows → RustFS + avatars → account area → end-to-end matrix. Rollback: revert package pins; page and spec additions are additive. No database migration is required (EAV schema is registered in-memory at startup); recreating the Aspire dev volumes remains the full local reset. If the Aspire 17.x jump breaks the AppHost irreparably, fall back to the latest 13.6.x line and pin RustFs/MailPit packages compatible with it — recorded as the contingency, not the plan.
 
-## Open Questions
+## Resolved Questions
 
-- Whether the CSS isolation `.styles.css` bundle is fingerprinted by `MapStaticAssets` — verified during the foundations task; fallback documented.
-- Final avatar limits (proposal: png/jpeg/webp, max 2 MB) — confirm during implementation.
-- Which Mailpit endpoint form (Aspire-injected endpoint vs a pinned host port) the Playwright suite consumes — resolve when wiring the E2E workspace.
+- The CSS isolation `.styles.css` bundle is fingerprinted by `MapStaticAssets`; the page emits the fingerprinted URL and the response is served with immutable caching. `asp-append-version` also covers the shared token and primitive sheets.
+- Avatar limits are PNG, JPEG, and WebP, 2 MB, with a magic-byte check in addition to the content-type allow-list.
+- The Playwright suite consumes Mailpit over HTTP at a pinned port (`8025`, with SMTP on `1025`); `MAILPIT_BASE_URL` defaults to `http://localhost:8025` and can be overridden.
 
 ## Implementation Notes
 
@@ -107,3 +107,42 @@ The FullSample (`229fefbd-f371-4774-bc36-f15aa7cd1494`) and PasswordRegistration
 - The sample's TOTP setup uses `PlainBytesTotpKey.New()`, `TotpAuthenticatorUri.Generate`, QRCoder `PngByteQRCode`, `TryAddTotpDeviceAsync`, and `TryCreateRecoveryCodesAsync`; our page transcribes those calls and adds an inline SVG QR plus a manual key.
 - The sample's `ManageProfile` replaces the whole attribute set from a fresh collection. Our account update starts from the existing values (`new AttributeValueCollection(schema, profile.Attributes.Values)`) so unrelated attributes survive partial updates.
 - Recovery-code generation returns `null` when two-factor is not enabled; the security page treats that as "no codes yet" rather than an error.
+
+
+## Verification Results
+
+### Environment constraint
+
+The sandbox network policy blocks Docker registries (`registry-1.docker.io`, `mcr.microsoft.com`, and mirrors return `403 Approval required`). Container images therefore cannot be pulled, and the Aspire container resources could not be started. The IdentityServer was verified by running it directly over HTTPS with the Development certificate, a native PostgreSQL 17.12 instance, Mailpit 1.34.0 (SMTP 1025, HTTP 8025), and RustFS 1.0.7 (S3 9000). The database was dropped and recreated and the DataProtection key ring cleared before the recorded runs.
+
+This is why tasks 1.1 (`aspire run` with Postgres/Mailpit), 5.1 (Aspire-provisioned RustFS bucket), and 7.1 (Aspire dashboard resource health) remain unchecked. Their code is implemented and compiles. The RustFS contract was verified natively: bucket creation, authenticated PUT, presigned GET (`200 image/png`), and anonymous object GET (`403`).
+
+### Automated checks
+
+- `dotnet build`: succeeded (only the expected `Aspire.AppHost.Sdk` deprecation warning from the 17.0.0 SDK).
+- `dotnet list Zaiware.Platform.IdentityServer/... package --include-transitive`: no Entity Framework Core package is referenced by the IdentityServer.
+- Playwright, from `tests/e2e`, with `NODE_PATH=/usr/local/share/npm-global/lib/node_modules`, `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`, `IDENTITY_BASE_URL=https://localhost:5001`, `MAILPIT_BASE_URL=http://localhost:8025`, one worker and no retries: **30 passed**, and a second consecutive run against the same stack also **30 passed**.
+- Capability coverage:
+  - `ui-foundations`: theme default/persistence/FOUC, no-store, fingerprinted + immutable assets, scoped CSS.
+  - `password-totp-login`: username and email sign-in, generic failure, TOTP challenge, wrong-code rejection, direct-navigation bounce, recovery-code completion/reuse rejection (the latter in the security flow).
+  - `otp-login`: full Mailpit round trip, server cooldown, resend refusal, paste/auto-submit, change-address escape hatch, four-attempt invalidation.
+  - `user-account`: read-only email, username change usable at sign-in, duplicate rejection, display-name persistence, password change/old-password failure, TOTP enroll/abandon/disable/regenerate, recovery-code display/count.
+  - `avatar-storage`: placeholder, valid upload served through the redirect route, size/type/spoofed-signature rejection, unauthenticated bounce for GET and upload.
+- Fresh seed run created the demo user plus the five deterministic E2E identities; the next start created no duplicates and re-applied the configured passwords/usernames and TOTP policy. No schema migration was added; only the base storage migration runs.
+
+### Manual checks
+
+- Reviewed Login and Account screenshots in both themes. The only visual defect found (the "or" divider touching the sign-in button) was fixed and re-reviewed.
+- Contrast spot checks on the token pairs used by text, muted text, links, buttons, danger/success notices, and placeholders: every pair met AA (minimum 4.71:1 light, 5.20:1 dark).
+- Mailpit's UI was inspected and shows the confirmation email with its code; the HTTP API shapes (`/api/v1/messages`, `/api/v1/message/{id}`) were confirmed against the running instance.
+- The Aspire dashboard/resource-health check could not be performed because the containers cannot start (registry block).
+
+### Implementation deviations
+
+- The Development seed re-applies configured passwords and usernames on every start, and removes TOTP devices for identities that have no configured secret. This keeps disposable E2E identities recoverable after a failed run; it is Development-only.
+- Development password throttling is relaxed (`MaxFailedAttempts` 10, 50 attempts per 30 seconds, 10-second throttle, no escalation) so the password-change matrix does not lock the test identity. Production keeps the Duende defaults.
+- Three extra deterministic identities (`e2e-account`, `e2e-security`, `e2e-password-change`) were added beyond the two required, so profile/security tests mutate disposable users rather than the demo identity.
+- Mailpit is pinned to host ports 8025 (HTTP) and 1025 (SMTP) for the test suite.
+- Presigned URLs are normalised from `https` to `http` when the configured RustFS endpoint is plain HTTP; SigV4 signs the host, so the signature remains valid.
+- A blocked OTP resend now re-stores the pending token so the cooldown response does not end the OTP session.
+- Static assets are explicitly served with immutable caching for fingerprinted paths; Development otherwise emits `no-cache`.

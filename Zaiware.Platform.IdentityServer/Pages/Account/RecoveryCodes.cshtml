@@ -1,0 +1,29 @@
+@page
+@model Zaiware.Platform.IdentityServer.Pages.Account.RecoveryCodesModel
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Recovery codes";
+}
+
+<div class="card recovery-codes">
+  <header class="card__header">
+    <h1 id="title" class="card__title">Save your recovery codes</h1>
+    <p class="lead">Each code works once if you lose access to your authenticator app. This is the only time they are shown.</p>
+  </header>
+
+  <ul class="recovery-codes__list" aria-label="Recovery codes">
+    @foreach (var code in Model.Codes)
+    {
+      <li><code>@code</code></li>
+    }
+  </ul>
+
+  <div class="notice notice--info" role="note">
+    Store these codes somewhere safe. Generating new codes later invalidates these.
+  </div>
+
+  <form method="post" asp-page="/Account/RecoveryCodes">
+    <button class="btn btn--primary btn--block" type="submit" id="recovery-done-btn">I've saved these codes</button>
+  </form>
+</div>

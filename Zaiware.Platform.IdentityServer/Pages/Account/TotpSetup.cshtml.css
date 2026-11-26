@@ -1,0 +1,31 @@
+.totp-setup__qr {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-muted);
+}
+
+.totp-setup__qr img {
+  width: 220px;
+  height: 220px;
+  image-rendering: pixelated;
+}
+
+.totp-setup__key {
+  margin-bottom: var(--space-5);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+.totp-setup__actions {
+  margin-top: var(--space-4);
+}

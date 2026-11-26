@@ -67,6 +67,19 @@ test.describe('ui foundations', () => {
     expect(hrefs.some((href) => href.includes('.styles.css'))).toBe(true);
   });
 
+  test('fingerprinted assets are served as immutable', async ({ page }) => {
+    await page.goto('/Account/Login');
+
+    const hrefs = await page.locator('link[rel="stylesheet"]').evaluateAll((links) =>
+      links.map((link) => link.getAttribute('href') || ''));
+
+    for (const href of hrefs) {
+      const response = await page.request.get(new URL(href, page.url()).toString());
+      expect(response.status()).toBe(200);
+      expect((response.headers()['cache-control'] || '').toLowerCase()).toContain('immutable');
+    }
+  });
+
   test('page CSS is scoped to its page', async ({ page }) => {
     await page.goto('/Account/Login');
 
