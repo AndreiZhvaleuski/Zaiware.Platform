@@ -42,8 +42,8 @@ capabilities:
       contentFile: ./aspire-context.md
 
   # Runtime egress for Aspire/DCP container image pulls. Docker Hub credentials
-  # and blob redirects use auth.docker.io and Cloudflare/R2; MCR serves the
-  # Aspire dashboard and Microsoft base images.
+  # and blob redirects use auth.docker.io and Cloudflare/CloudFront/R2; MCR
+  # serves the Aspire dashboard and Microsoft base images.
   - type: com.docker.sandbox/network-policy@1
     config:
       runtime:
@@ -51,8 +51,12 @@ capabilities:
           - registry-1.docker.io:443
           - auth.docker.io:443
           - production.cloudflare.docker.com:443
+          - "*.cloudflare.docker.com:443"
+          - production.cloudfront.docker.com:443
+          - "*.cloudfront.docker.com:443"
           - "*.r2.cloudflarestorage.com:443"
           - mcr.microsoft.com:443
+          - "*.mcr.microsoft.com:443"
           - docker.io:443
 
 # Declarative identity only; no `requires` (see the header comment).

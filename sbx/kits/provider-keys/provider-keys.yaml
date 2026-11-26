@@ -19,6 +19,9 @@ capabilities:
       runtime:
         allow:
           - opencode.ai:443
+          # Model catalog and other first-party subdomains. Keep the apex entry
+          # above because a wildcard does not cover it.
+          - "*.opencode.ai:443"
 
   # OpenCode Go (hosted inference at opencode.ai). Key value resolves from the
   # host secret `opencode-go`.
@@ -31,5 +34,8 @@ capabilities:
         proxyManaged: true
         inject:
           - domain: opencode.ai
+            header: Authorization
+            format: "Bearer %s"
+          - domain: models.opencode.ai
             header: Authorization
             format: "Bearer %s"

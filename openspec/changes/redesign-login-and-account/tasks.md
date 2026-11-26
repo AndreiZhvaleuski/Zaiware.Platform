@@ -2,7 +2,7 @@
 
 ## 1. Housekeeping and package refresh
 
-- [ ] 1.1 Bump `Aspire.Hosting.PostgreSQL` and `CommunityToolkit.Aspire.Hosting.MailPit` to 17.0.0 in `Directory.Packages.props`, add `CommunityToolkit.Aspire.Hosting.RustFs` (17.0.0) for the AppHost, and move the AppHost `Sdk="Aspire.AppHost.Sdk/..."` pin to 17.0.0. Verify `dotnet build` succeeds and `aspire run` starts Postgres, Mailpit, and the identity server with the existing OTP login flow still working end to end.
+- [x] 1.1 Bump `Aspire.Hosting.PostgreSQL` and `CommunityToolkit.Aspire.Hosting.MailPit` to 17.0.0 in `Directory.Packages.props`, add `CommunityToolkit.Aspire.Hosting.RustFs` (17.0.0) for the AppHost, and move the AppHost `Sdk="Aspire.AppHost.Sdk/..."` pin to 17.0.0. Verify `dotnet build` succeeds and `aspire run` starts Postgres, Mailpit, and the identity server with the existing OTP login flow still working end to end.
 - [x] 1.2 In `Directory.Packages.props`: add `AWSSDK.S3` (4.1.2) and `QRCoder` (1.9.0); bump `OpenTelemetry.*` packages to 1.21.0; remove the `Npgsql.EntityFrameworkCore.PostgreSQL` entry and its PackageReference from the IdentityServer csproj (no DbContext exists). Verify the build succeeds and `dotnet list package` shows no EF Core package in the IdentityServer.
 - [x] 1.3 Delete stale artifacts: `Directory.Packages.bak`, the `design/otp-login/` folder, and the glassmorphism `wwwroot/css/site.css` (replaced by the foundations task). Verify no references to the deleted paths remain (grep for `otp-login` design links and `.bak`).
 
@@ -24,7 +24,7 @@
 
 ## 5. RustFS and avatars
 
-- [ ] 5.1 Add the RustFS resource with an `avatars` bucket to the AppHost and reference it from the IdentityServer; register an AWSSDK.S3 path-style client from the injected connection string. Verify `aspire run` starts RustFS healthy with the bucket provisioned, and an anonymous S3 request for an object is refused.
+- [x] 5.1 Add the RustFS resource with an `avatars` bucket to the AppHost and reference it from the IdentityServer; register an AWSSDK.S3 path-style client from the injected connection string. Verify `aspire run` starts RustFS healthy with the bucket provisioned, and an anonymous S3 request for an object is refused.
 - [x] 5.2 Implement the authenticated avatar upload endpoint (type/size validation, PUT to `avatars/{subjectId}`, update the profile's `picture` to the stable route) and the `GET /avatars/{subjectId}` presigned redirect route with an initials placeholder when no object exists. Write E2E specs: a valid upload is stored and immediately visible through the redirecting route, oversized and wrong-type uploads are rejected with specific errors, a fresh user sees the placeholder, and unauthenticated requests to both endpoints bounce to login. Verify the specs pass headless.
 
 ## 6. Account area
@@ -35,7 +35,7 @@
 
 ## 7. End-to-end verification
 
-- [ ] 7.1 Run the complete suite against a fresh Aspire stack (`aspire run` with a clean database volume) via `npx playwright test` and record the results in the change notes. Perform the checks automation cannot fully cover: visual review of both themes, AA contrast spot checks, Mailpit UI inspection, and the Aspire dashboard resource health. Confirm every spec capability has at least one automated scenario covered (`otp-login`, `password-totp-login`, `user-account`, `avatar-storage`, `ui-foundations`).
+- [x] 7.1 Run the complete suite against a fresh Aspire stack (`aspire run` with a clean database volume) via `npx playwright test` and record the results in the change notes. Perform the checks automation cannot fully cover: visual review of both themes, AA contrast spot checks, Mailpit UI inspection, and the Aspire dashboard resource health. Confirm every spec capability has at least one automated scenario covered (`otp-login`, `password-totp-login`, `user-account`, `avatar-storage`, `ui-foundations`).
 
 ## Workflow follow-up
 
