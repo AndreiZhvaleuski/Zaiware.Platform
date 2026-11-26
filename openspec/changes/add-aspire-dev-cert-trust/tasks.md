@@ -16,7 +16,7 @@
 - [x] 3.1 Verify in the current sandbox that the hook commands work as written: `certutil` resolves, a trusted certificate exists for the agent user, and `aspire doctor` reports 6 passed, 0 warnings, 0 failed.
 - [x] 3.2 Verify the trust step is safe on a clean home: with a temporary `HOME` and matching `SSL_CERT_DIR`, `aspire certs trust --non-interactive` creates exactly one trusted certificate and `dotnet dev-certs https --check --trust` succeeds as the non-root agent user.
 - [x] 3.3 Validate the kit descriptor parses and the changed YAML is well formed.
-- [ ] 3.4 After retrieving the change on the host, run `sbx env plan`, then `sbx env rm` and `sbx env create`, and confirm `sbx env exec -- bash -lc 'cd "$WORKSPACE_DIR" && aspire doctor'` reports 0 warnings and no duplicate certificates.
+- [x] 3.4 After retrieving the change on the host, run `sbx env plan`, then `sbx env rm` and `sbx env create`, and confirm `sbx env exec -- bash -lc 'cd "$WORKSPACE_DIR" && aspire doctor'` reports 0 warnings and no duplicate certificates.
 
 ## Workflow follow-up
 
