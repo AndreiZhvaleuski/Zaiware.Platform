@@ -138,6 +138,21 @@ test.describe('account status flags', () => {
     await expect(page.locator('#current-password')).toHaveCount(1);
   });
 
+  test('cleaning the status flag preserves other query parameters and the hash', async ({ page }) => {
+    await signIn(page, passwordUser.email, passwordUser.password);
+    await page.goto('/Account?status=ProfileUpdated&keep=yes#frag');
+
+    await expectStatusBanner(page, 'Profile updated.');
+    await expect.poll(() => {
+      const url = new URL(page.url());
+      return `${url.pathname}${url.search}${url.hash}`;
+    }).toBe('/Account?keep=yes#frag');
+
+    await page.reload();
+    await expectNoStatusBanner(page);
+    await expect(page.locator('#account-username')).toHaveValue(passwordUser.username);
+  });
+
   test('an unknown status renders no banner and is cleaned from the URL', async ({ page }) => {
     await signIn(page, passwordUser.email, passwordUser.password);
     await page.goto('/Account?status=DefinitelyNotAStatus');

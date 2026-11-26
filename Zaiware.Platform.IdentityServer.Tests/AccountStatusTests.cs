@@ -38,6 +38,22 @@ public sealed class AccountStatusTests
         Assert.True(AccountStatusExtensions.TryGetMessage(status, out _));
     }
 
+    [Fact]
+    public void Every_canonical_status_name_parses_in_any_case()
+    {
+        foreach (var name in Enum.GetNames<AccountStatus>())
+        {
+            Assert.True(AccountStatusExtensions.TryParse(name, out var exact), name);
+            Assert.Equal(name, exact.ToString());
+
+            Assert.True(AccountStatusExtensions.TryParse(name.ToLowerInvariant(), out var lower), name);
+            Assert.Equal(exact, lower);
+
+            Assert.True(AccountStatusExtensions.TryParse(name.ToUpperInvariant(), out var upper), name);
+            Assert.Equal(exact, upper);
+        }
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -51,9 +67,28 @@ public sealed class AccountStatusTests
     }
 
     [Theory]
+    [InlineData("0")]
+    [InlineData("1")]
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("4")]
+    [InlineData("5")]
+    [InlineData("6")]
+    public void Defined_numeric_aliases_are_rejected(string value)
+    {
+        Assert.False(AccountStatusExtensions.TryParse(value, out _));
+    }
+
+    [Theory]
+    [InlineData(" 0")]
+    [InlineData("0 ")]
+    [InlineData("+1")]
+    [InlineData("0,ProfileUpdated")]
+    [InlineData("ProfileUpdated,AvatarUpdated")]
+    [InlineData("0x0")]
     [InlineData("42")]
     [InlineData("999")]
-    public void Numeric_values_outside_the_enum_are_rejected_by_the_defined_guard(string value)
+    public void Numeric_whitespace_and_combined_aliases_are_rejected(string value)
     {
         Assert.False(AccountStatusExtensions.TryParse(value, out _));
     }
