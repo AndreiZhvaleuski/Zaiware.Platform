@@ -12,6 +12,7 @@ The platform's sign-in today is a single-method email-OTP flow behind a glassmor
 - **Account area**: profile section (unique username, display name, read-only email, avatar upload with preview) and security section (password set/change, TOTP enable/disable, recovery-code regeneration).
 - **Avatar storage on RustFS**: a private `avatars` bucket added to the Aspire AppHost, server-mediated uploads, and presigned-URL redirect serving — the bucket is never public and the profile's `picture` value is a stable application route.
 - **UI foundations**: hand-rolled design tokens with dark/light support, per-page CSS isolation, fingerprinted static assets with immutable caching, `no-store` on auth pages, and a carried-over accessibility baseline (aria wiring, focus management, reduced motion, progressive enhancement).
+- **Automated end-to-end coverage**: a committed Playwright workspace (sandbox-provided Chromium, headless) exercising the sign-in flows, account edits, avatar serving, theme behavior, and cache headers against a running Aspire AppHost, with deterministic Development seed identities.
 - **Package refresh to current lines**: Aspire hosting packages and AppHost SDK to the 17.x line, OpenTelemetry to 1.21.0, add AWSSDK.S3 and QRCoder, remove the unused EF Core package, delete `Directory.Packages.bak`. Duende stays on the latest 8.1.0-preview.7 line.
 - **Housekeeping**: archive the completed `add-otp-login` change so its capability spec is synced before this change modifies it (done as the first step of this change).
 
@@ -31,6 +32,7 @@ The platform's sign-in today is a single-method email-OTP flow behind a glassmor
 - `Zaiware.Platform.IdentityServer`: new/rebuilt Razor Pages (combined Login, TwoFactor challenge, restyled EnterOtp, Account area, TotpSetup, RecoveryCodes); profile schema extension (username, picture); RustFS S3 client wiring; avatar upload endpoint and presigned redirect route; QR rendering; Development seed gains username + password; package references change (AWSSDK.S3, QRCoder added; EF package removed).
 - `Zaiware.Platform.AppHost`: RustFS resource + `avatars` bucket + reference wiring; Aspire AppHost SDK pin and hosting package versions move to the 17.x line.
 - `Directory.Packages.props`: version bumps and additions/removals listed above; `Directory.Packages.bak` deleted.
+- `tests/e2e`: new Playwright workspace (sandbox kit: `@playwright/test` 1.61.1, Chromium, headless) with deterministic Development seed identities; specs read OTP codes from Mailpit's HTTP API and compute TOTP codes from a fixed test secret.
 - `design/otp-login/`: deleted (superseded).
 - OpenSpec: `add-otp-login` archived; `otp-login` spec synced and then modified by this change's delta.
 - Database: no schema migration required — profile attributes ride the existing EAV storage tables (schema is registered in-memory at startup).
