@@ -90,3 +90,20 @@ Dev-stage system. Sequence: package refresh (with full run verification) → fou
 - Whether the CSS isolation `.styles.css` bundle is fingerprinted by `MapStaticAssets` — verified during the foundations task; fallback documented.
 - Final avatar limits (proposal: png/jpeg/webp, max 2 MB) — confirm during implementation.
 - Which Mailpit endpoint form (Aspire-injected endpoint vs a pinned host port) the Playwright suite consumes — resolve when wiring the E2E workspace.
+
+## Implementation Notes
+
+### 2.1 Foundations spike adjustments
+
+The FullSample (`229fefbd-f371-4774-bc36-f15aa7cd1494`) and PasswordRegistration (`b1741efe-2ce2-487d-80a4-d84844d34337`) sources were reviewed against this design. Adjustments:
+
+- `IPasswordAuthenticator.TryAuthenticateAsync` takes an `AttributeCode` (an `AttributeDefinition` converts implicitly), not an `AttributeDefinition` parameter: `TryAuthenticateAsync(OidcStandardAttributes.PreferredUserName, identifier, NonValidatedPassword.Create(password), ct)`. The design's signature still maps, but the code uses the implicit conversion.
+- Duende User Management 8.1's default `PasswordOptions.MinLength` is **15**, not 8, and no character-class minimums are required. The seed and E2E passwords therefore use 15+ character passphrases (for example `E2e-Password-2026!`).
+- The sample's `SecondFactorStateCookie` serializes a subject id with DataProtection and writes a `__Host-SecondFactorState` cookie with `Secure`, `HttpOnly`, `SameSite=Strict`, `IsEssential`, and a five-minute `Expires`. Our implementation follows it, but reads with `UserSubjectId.TryCreate` instead of `UserSubjectId.Create` so a malformed payload cannot throw, and sets `Path = "/"` explicitly (required by the `__Host-` prefix).
+- The sample has a separate `LoginWithRecoveryCode` page. This design combines TOTP and recovery-code entry on one challenge page; both `ITotpAuthenticator` and `IRecoveryCodeAuthenticator` are available for that composition.
+- Password seeding: the FullSample seeds a password through `IUserImporter` and `IPasswordHashAlgorithm`, while PasswordRegistration shows `TryValidatePasswordAsync` + `TrySetPasswordAsync`. The latter is the documented backend-capable self-service API (the docs explicitly allow seed scripts to use it) and avoids hashing by hand, so the Development seed uses `TryValidatePasswordAsync` → `TrySetPasswordAsync`.
+- The sample's profile schema administration (`IUserProfileSchemaAdmin`) predates the documented in-memory extension API. This design uses `BuiltInSchemas.UserProfile.Extend(preferredUsername, picture)` + `AddInMemoryDataExtensionSchemas`, which the current docs recommend for code-owned schemas.
+- The sample signs in with `IdentityServerUser` and `amr` additional claims. Our password flow does the same, adding `email`, `name`, and `preferred_username` claims. The existing OTP page keeps its raw `ClaimsIdentity` sign-in and adds `amr = "otp"`.
+- The sample's TOTP setup uses `PlainBytesTotpKey.New()`, `TotpAuthenticatorUri.Generate`, QRCoder `PngByteQRCode`, `TryAddTotpDeviceAsync`, and `TryCreateRecoveryCodesAsync`; our page transcribes those calls and adds an inline SVG QR plus a manual key.
+- The sample's `ManageProfile` replaces the whole attribute set from a fresh collection. Our account update starts from the existing values (`new AttributeValueCollection(schema, profile.Attributes.Values)`) so unrelated attributes survive partial updates.
+- Recovery-code generation returns `null` when two-factor is not enabled; the security page treats that as "no codes yet" rather than an error.

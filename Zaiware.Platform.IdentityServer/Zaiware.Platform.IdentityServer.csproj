@@ -8,9 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="Duende.IdentityServer" />
     <PackageReference Include="Duende.Storage.PostgreSql" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="QRCoder" />
   </ItemGroup>
 
   <ItemGroup>
