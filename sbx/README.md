@@ -19,8 +19,8 @@ placeholder for the real value on outbound requests.
 | `kits/openspec/openspec.yaml` | Mixin: OpenSpec CLI (standalone binary, no Node) and its GitHub runtime access. |
 | `kits/openspec/openspec-context.md` | Agent context: project artifacts, workflow skills, and init guidance. |
 | [`docker.io/sbx/playwright:1.61.1`](#playwright) | [Published Playwright mixin](#playwright): `playwright`, `@playwright/test`, headless Chromium, shared browser path, and scoped network grants. |
-| `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), persistent OpenCode data (`volume@1`), and the OpenCode `AGENTS.md` context profile (`agent-context@1`). |
-| `kits/opencode-server/opencode-server-context.md` | Injected global `AGENTS.md` profile: server-mode, clone-only workspace, and Git handoff workflow. |
+| `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), persistent OpenCode data (`volume@1`), and the OpenCode `AGENTS.md` context profile (`agent-context@1`); its kit index description names the Git delivery contract. |
+| `kits/opencode-server/opencode-server-context.md` | Injected global `AGENTS.md` profile: server mode, clone-only workspace, the Git delivery contract, and safe-to-drop verification. |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
 | `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 
@@ -187,19 +187,57 @@ The generated profile requires the agent to:
 
 - use the boot-managed OpenCode server started by `sbx env create`;
 - edit only the private Git clone at `$WORKSPACE_DIR`, never the read-only host
-  source at `/run/sandbox/source`;
+  view at `/run/sandbox/source`;
+- work only in `$WORKSPACE_DIR` or an existing linked worktree; never create extra clones, copies, or new worktrees to deliver work;
 - commit completed file-changing tasks in the sandbox and report the branch and
   commit hash.
 
-The Docker sbx remote `sandbox-zaiware-platform` exists on the **host**: it lets
-the host fetch commits from the sandbox. It is not available inside the sandbox,
-so the agent must never run `git push sandbox-zaiware-platform`. After the agent
-reports a branch and commit, retrieve the work from the host repository with the
-corresponding branch checked out:
+### Git delivery contract
+
+Committing in the sandbox is delivery. The host-side remote
+`sandbox-zaiware-platform` reads the sandbox clone directly while the sandbox
+is running, so nothing is pushed from inside the sandbox. Its URL is the
+host-side path `/sandbox/<name>`, here `/sandbox/zaiware-platform`; that path
+does not exist inside the sandbox, so the agent must never create it,
+initialize a repository there, or push to it.
+
+Retrieve the work from the host repository with fetch and merge:
 
 ```powershell
-git pull sandbox-zaiware-platform <branch>
+git fetch sandbox-zaiware-platform
+git merge sandbox-zaiware-platform/<branch>
 ```
+
+Using `git fetch` first makes the retrieved ref explicit and brings every
+sandbox branch into `refs/remotes/sandbox-zaiware-platform/*`; merging the
+named branch does not depend on which branch the host currently has checked
+out.
+
+GitHub is the user's channel, not the sandbox's. The agent must not push to GitHub,
+open a pull request, run `gh auth login`, or configure Git or `gh`
+credentials unless the user explicitly asks for a GitHub push in the current
+session. SSH port 22 is blocked and HTTPS has no credentials, so such pushes
+fail by design; do not retry them or repair credentials. The generated `sbx`
+frontend "Git Authentication" section claims the proxy handles GitHub
+authentication — that claim is false for this environment. `origin` points at
+GitHub and is usually stale; never use it to update or verify host state.
+
+`/run/sandbox/source` is the live, read-only view of the host repository and
+the only authority for the host's current branches. Check delivery with:
+
+```powershell
+git -C /run/sandbox/source merge-base --is-ancestor <sha> main
+```
+
+Exit `0` means the commit is on host `main`; `1` means it may not have been
+retrieved; an unknown-commit error means it was definitely not retrieved.
+
+Before reporting completion, the agent must run the safe-to-drop checks:
+`git status --short` in every worktree from `git worktree list`,
+`git stash list`, and the reachability check for every branch tip. The report
+ends with `Safe to drop` plus the evidence, or `NOT safe to drop: <branch>
+@<sha>` plus the exact host fetch and merge commands. If the user says they
+pulled, re-check `/run/sandbox/source` before confirming.
 
 Do not remove or recreate the sandbox before retrieving commits that exist only
 in its private clone; `sbx env rm` deletes that clone.
@@ -574,14 +612,21 @@ Remove-Variable pw
 sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec playwright opencode-server; do test -s "/usr/share/sandbox/kit/$k/$k-context.md" || { echo "missing $k"; exit 1; }; done'
 sbx env exec -- bash -lc 'for k in provider-keys dotnet aspire openspec playwright opencode-server; do grep -q "$k" /home/agent/.config/opencode/AGENTS.md || { echo "missing index $k"; exit 1; }; done'
 sbx env exec -- test -s /home/agent/.config/opencode/AGENTS.md
+
+# The opencode-server context carries the delivery contract and verdict:
+sbx env exec -- test -s /usr/share/sandbox/kit/opencode-server/opencode-server-context.md
+sbx env exec -- grep -q "Safe to drop" /usr/share/sandbox/kit/opencode-server/opencode-server-context.md
+sbx env exec -- grep -q "git fetch sandbox-" /usr/share/sandbox/kit/opencode-server/opencode-server-context.md
+sbx env exec -- grep -q "Git delivery" /home/agent/.config/opencode/AGENTS.md
+sbx env exec -- grep -n opencode-server /home/agent/.config/opencode/AGENTS.md
 sbx env exec -- cat /home/agent/.config/opencode/AGENTS.md
 ```
 
 The `AGENTS.md` output must contain a kit index/reference for `provider-keys`,
 `dotnet`, `aspire`, `openspec`, `playwright`, and `opencode-server`. The staged
 contexts must contain the credential, SDK, Aspire, OpenSpec, headless-browser,
-and server/clone/Git-handoff guidance respectively. This mechanism does not
-create a repository-root `AGENTS.md`.
+and server, clone, Git delivery, and safe-to-drop guidance respectively. This
+mechanism does not create a repository-root `AGENTS.md`.
 
 If `anon` is not `401`, the server either did not start or has no password.
 Check that `..\zaiware-secrets\server-password` exists on the host and is

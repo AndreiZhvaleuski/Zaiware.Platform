@@ -30,8 +30,10 @@ sandboxOptions:
 # Mounts the directory containing this file. Clone mode: the sandbox works in a
 # private git clone of the workspace instead of a bind mount, so host and sandbox
 # changes only meet through Git commits and retrieval. Clone mode is mandatory
-# for the normal workflow; do not override it with --clone=false. Retrieve
-# commits on the host with `git pull sandbox-zaiware-platform <branch>`.
+# for the normal workflow; do not override it with --clone=false. Nothing is
+# pushed from inside the sandbox; retrieve commits on the host with
+# `git fetch sandbox-zaiware-platform` followed by
+# `git merge sandbox-zaiware-platform/<branch>`.
 workspace:
   path: .
   clone: true

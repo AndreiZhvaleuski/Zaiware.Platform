@@ -3,7 +3,9 @@
 Status: **implemented; historical record.** The plan below documents the original
 opencode-server workflow injection. Agent context now also covers the four
 ordinary tool kits; see `sbx/README.md` and `sbx/MIXINS.md` for the current
-rules.
+rules. The Git handoff instructions below are superseded by `sbx/README.md` and
+`sbx/kits/opencode-server/opencode-server-context.md`, which define the
+host-side fetch/merge contract.
 
 ## 1. Objective
 
