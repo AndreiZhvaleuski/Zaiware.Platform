@@ -1,5 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "skills": [
+    "https://raw.githubusercontent.com/microsoft/aspire-skills/e529b608336cd41c1b1262aa76d00d9e4ef1bff8/opencode/v2/"
+  ],
   "mcp": {
     "servers": {
       "nuget": {
@@ -12,8 +15,20 @@
         "command": ["dnx", "Duende.Documentation.Mcp", "--yes", "--"],
         "cwd": "~/.local/share/opencode/duende-mcp",
         "timeout": { "startup": 120000 }
+      },
+      "microsoft-learn": {
+        "type": "remote",
+        "url": "https://learn.microsoft.com/api/mcp"
       }
     }
+  },
+  "lsp": {
+    "roslyn": {
+      "command": ["dotnet", "dnx", "roslyn-language-server", "--yes", "--prerelease", "--", "--stdio", "--daemon-mode", "--autoLoadProjects"],
+      "extensions": [".cs", ".razor", ".cshtml"]
+    },
+    "csharp": { "disabled": true },
+    "razor": { "disabled": true }
   },
   "providers": {
     "opencode-go": {

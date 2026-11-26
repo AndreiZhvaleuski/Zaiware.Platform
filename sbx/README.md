@@ -22,6 +22,8 @@ placeholder for the real value on outbound requests.
 | `kits/opencode-server/opencode-server.yaml` | Mixin: pinned OpenCode binary, MCP/server startup, keep-alive (`long-running@1`), persistent OpenCode data (`volume@1`), and the OpenCode `AGENTS.md` context profile (`agent-context@1`); its kit index description names the Git delivery contract. |
 | `kits/opencode-server/opencode-server-context.md` | Injected global `AGENTS.md` profile: server mode, clone-only workspace, the Git delivery contract, and safe-to-drop verification. |
 | `../.opencode/opencode.json` | OpenCode config: which env var each provider reads, default permissions. |
+| `../.opencode/skills/` | Vendored Duende and .NET skill packs, the pinned Aspire catalog, provenance, and the sync script. |
+| `../.opencode/agents/` | Duende specialist subagents. |
 | `MIXINS.md` | Playbook for adding or changing a kit: install pattern, template, verification, and the evidence log. |
 
 Split rationale: `opencode.json` is *agent* configuration and belongs in the
@@ -316,11 +318,11 @@ gets the same toolchain with no network round trip.
   package`). The Dockerfile copies only the ICU shared libraries from the build
   stage into the overlay; `libssl` and `zlib` come from the workload.
 - Egress: the mixin grants NuGet restore (`api.nuget.org`, `*.nuget.org`),
-  the endpoints needed for an in-sandbox SDK install, and the Duende MCP
+  the endpoints needed for an in-sandbox SDK install, the Duende MCP
   indexers (`docs.duendesoftware.com`, `duendesoftware.com`, and
-  `codeload.github.com`). The composed OpenSpec kit already grants
-  `github.com` for sample-source links. Add another feed's host there if the
-  project uses one.
+  `codeload.github.com`), and `learn.microsoft.com` for the Microsoft Learn
+  MCP server. The composed OpenSpec kit already grants `github.com` for
+  sample-source links. Add another feed's host there if the project uses one.
 
 The build downloads from `aka.ms` and `builds.dotnet.microsoft.com` on the
 host, so it needs host network access; the sandbox itself only needs the
@@ -341,6 +343,42 @@ A Kit change takes effect only when the sandbox is created again. OpenCode's
 data directory is a persistent volume (see [Session data](#session-data)), so
 later recreations keep it. The first create after this change starts with an
 empty volume; export history from the old sandbox first if it matters.
+
+## Agent skills
+
+OpenCode sessions use vendored skill packs from `.opencode/skills` and two
+Duende specialist subagents from `.opencode/agents`. Both are committed, so a
+new sandbox or a fresh clone gets them without a setup step.
+
+| Pack | Upstream | Mode | Skills |
+| --- | --- | --- | ---: |
+| Duende | `DuendeSoftware/duende-skills` | vendored at a pinned commit | 26 |
+| .NET | `dotnet/skills` | vendored, six curated plugins | 65 |
+| Aspire | `microsoft/aspire-skills` | OpenCode HTTP catalog at a pinned commit | 8 |
+
+The Aspire pack is the only non-vendored pack. OpenCode downloads its
+`index.json` and skill files from the pinned catalog URL in
+`.opencode/opencode.json` and caches them under its data directory. Every vendor
+pack's repository, ref, included paths, and content hash live in
+`.opencode/skills/sources.json`; `.opencode/skills/README.md` records the
+compatibility decisions, exclusions, and licenses.
+
+Update and verify from the workspace root:
+
+```bash
+bash .opencode/skills/sync-agent-skills.sh --check
+bash .opencode/skills/sync-agent-skills.sh --update
+bash .opencode/skills/sync-agent-skills.sh --pack duende --latest
+bash .opencode/skills/sync-agent-skills.sh --pack aspire --ref aspire=<40-char sha>
+```
+
+The script fetches the `codeload.github.com` tarballs, replaces only the managed
+pack directories, copies the upstream `LICENSE`, recomputes the content hashes,
+and rewrites the Aspire catalog URL. `--latest` also uses `api.github.com`.
+Both hosts are already granted by the OpenSpec kit. The Microsoft Learn MCP
+server added in `.opencode/opencode.json` needs `learn.microsoft.com:443`, which
+the dotnet kit now grants at runtime. The `update-agent-skills` skill wraps the
+update-and-review workflow.
 
 ## Aspire
 
