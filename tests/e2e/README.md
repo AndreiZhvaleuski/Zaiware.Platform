@@ -11,7 +11,8 @@ cd tests/e2e
 NODE_PATH=/usr/local/share/npm-global/lib/node_modules \
 PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
 IDENTITY_BASE_URL=https://localhost:5001 \
-MAILPIT_BASE_URL=http://localhost:8025 \
+MAILPIT_BASE_URL=http://127.0.0.1:8025 \
+AVATARS_PUBLIC_ENDPOINT=http://127.0.0.1:9000 \
 playwright test
 ```
 
@@ -44,6 +45,15 @@ export DATA_PROTECTION__KEYS_STORE_DIRECTORY='/tmp/dpkeys'
 - HTTPS is mandatory for second-factor sign-in: `__Host-SecondFactorState` has no HTTP
   fallback. Run with the `SelfHost` launch profile (`https://localhost:5001`) or any HTTPS
   endpoint.
+
+The Playwright process also reads `AVATARS_PUBLIC_ENDPOINT` (default `http://localhost:9000`)
+to assert that the CSP `img-src` allows the same origin the server uses for presigned avatar
+redirects. Keep it equal to the IdentityServer's `Avatars:PublicEndpoint`; the verified
+native run used `http://127.0.0.1:9000` for both.
+
+OTP sends have a fixed-window budget (30 per client IP and 300 globally per 10 minutes by
+default; configure the `OtpSendRateLimit` section). The full suite uses about ten sends per
+run, so two consecutive runs stay below the per-IP budget.
 
 Start the IdentityServer directly with:
 

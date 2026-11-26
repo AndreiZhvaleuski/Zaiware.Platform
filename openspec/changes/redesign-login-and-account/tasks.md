@@ -29,7 +29,7 @@
 
 ## 6. Account area
 
-- [x] 6.1 Build the Account page profile section: username (uniqueness errors), display name, read-only email, and avatar upload with preview; re-sign the user after profile updates so claims reflect the new values. Write E2E specs: a username change becomes usable at sign-in, a duplicate username is rejected, the display name persists after reload, and the avatar preview updates after upload. Verify the specs pass headless.
+- [x] 6.1 Build the Account page profile section: username (uniqueness errors), display name, read-only email, and avatar upload with preview; re-sign the user after profile updates so claims reflect the new values. Write E2E specs: a username change becomes usable at sign-in, a duplicate username is rejected, the display name persists after reload, and the avatar preview renders in Chromium (`naturalWidth > 0`, no CSP error) after upload. Verify the specs pass headless.
 - [x] 6.2 Build the Account security section: password set/change via `TryValidatePasswordAsync` + `TryChangePasswordAsync` (policy errors surfaced) and TOTP enrollment per the documented sequence — `PlainBytesTotpKey.New()`, QR as an SVG or PNG data URI via QRCoder plus the manual key, confirmation via `TryAddTotpDeviceAsync`, recovery codes displayed exactly once — plus disable (remove devices) and regeneration. Write E2E specs covering the full matrix: enroll → sign out → password sign-in presents the challenge → complete; abandon enrollment before confirming → no challenge; disable → no challenge; regenerate → old codes invalid; password change takes effect and the old password fails. Verify the specs pass headless.
 
 ## 7. End-to-end verification

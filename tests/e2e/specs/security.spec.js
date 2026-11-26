@@ -8,6 +8,7 @@ const {
   signOut,
   completeTotpChallenge,
   enterRecoveryCode,
+  enterTotp,
 } = require('../support/flows');
 
 async function readRecoveryCodes(page) {
@@ -31,6 +32,8 @@ test.describe('account security', () => {
     test.setTimeout(180_000);
 
     const user = securityUser;
+    let secret = null;
+    let currentRecoveryCodes = [];
 
     try {
       await signIn(page, user.email, user.password);
@@ -42,13 +45,14 @@ test.describe('account security', () => {
       await expect(page.locator('#totp-code')).toHaveAttribute('aria-describedby', /code-error/);
       await expect(page.locator('#totp-code')).toHaveAttribute('aria-describedby', /setup-errors/);
 
-      const secret = await readTotpSecret(page);
+      secret = await readTotpSecret(page);
       expect(secret.length).toBeGreaterThanOrEqual(16);
 
       await page.locator('#totp-code').fill(await freshTotp(secret));
       await page.locator('#totp-confirm-btn').click();
 
       const codesA = await readRecoveryCodes(page);
+      currentRecoveryCodes = codesA;
       await expect(page.locator('#totp-status')).toContainText('Enabled');
       await expect(page.locator('#recovery-count')).toHaveText(String(codesA.length));
 
@@ -69,6 +73,7 @@ test.describe('account security', () => {
       await page.goto('/Account');
       await page.locator('#regenerate-codes-btn').click();
       const codesB = await readRecoveryCodes(page);
+      currentRecoveryCodes = codesB;
 
       await signOut(page);
       await signIn(page, user.email, user.password);
@@ -105,15 +110,60 @@ test.describe('account security', () => {
       await expect(page).toHaveURL(/\/$/);
       await expect(page.locator('#email-done')).toHaveText(user.email);
     } finally {
-      // Best-effort cleanup if the test failed while the session was still usable.
-      try {
-        if (page.url().includes('/Account')) {
-          if (await page.locator('#disable-totp-btn').count() > 0) {
-            await page.locator('#disable-totp-btn').click();
+      // Robust cleanup: a failure at the challenge page (after signing out in the test)
+      // must not leave the disposable identity enrolled for the next run. Complete the
+      // half-auth challenge with the secret this test enrolled, then disable the factor.
+      const completeChallenge = async () => {
+        if (!page.url().includes('/Account/TwoFactor')) {
+          return;
+        }
+
+        if (secret) {
+          for (const offset of [0, 1]) {
+            try {
+              await enterTotp(page, await freshTotp(secret, offset));
+              await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+              return;
+            } catch {
+              if (!page.url().includes('/Account/TwoFactor')) {
+                return;
+              }
+            }
           }
         }
+
+        // If the TOTP step cannot be used (for example a consumed window), recovery
+        // codes from the current set are the deterministic fallback.
+        for (const code of [...currentRecoveryCodes].reverse()) {
+          try {
+            await enterRecoveryCode(page, code);
+            if (page.url().endsWith('/')) {
+              return;
+            }
+          } catch {
+            // Try the next candidate.
+          }
+        }
+      };
+
+      try {
+        await completeChallenge();
+        await page.goto('/Account');
+
+        // The test may have failed while signed out or between sessions.
+        if (page.url().includes('/Account/Login')) {
+          await signIn(page, user.email, user.password);
+          await completeChallenge();
+          await page.goto('/Account');
+        }
+
+        if (await page.locator('#disable-totp-btn').count() > 0) {
+          await page.locator('#disable-totp-btn').click();
+          await expect(page.locator('.notice--success')).toContainText('disabled');
+        }
       } catch {
-        // The session may already be signed out; the fresh-stack reset handles the rest.
+        // Best effort: the next app start reconciles the seeded TOTP state for this
+        // identity, and this test's final state is verified on a fresh stack anyway.
       }
     }
   });
