@@ -33,9 +33,9 @@ capabilities:
         name: OPENCODE_API_KEY
         proxyManaged: true
         inject:
+          # Keep the key scoped to the apex. The model-catalog subdomain is
+          # network-allowed above, but it must not receive the key until that
+          # endpoint is confirmed to require it.
           - domain: opencode.ai
-            header: Authorization
-            format: "Bearer %s"
-          - domain: models.opencode.ai
             header: Authorization
             format: "Bearer %s"

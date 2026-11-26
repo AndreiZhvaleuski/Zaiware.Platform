@@ -48,8 +48,11 @@ capabilities:
     config:
       runtime:
         allow:
-          - registry-1.docker.io:443
-          - auth.docker.io:443
+          # Docker Hub registry and token service. The wildcard also covers a
+          # future registry-2; the apex entry is required because a wildcard
+          # does not cover it.
+          - docker.io:443
+          - "*.docker.io:443"
           - production.cloudflare.docker.com:443
           - "*.cloudflare.docker.com:443"
           - production.cloudfront.docker.com:443
@@ -57,7 +60,6 @@ capabilities:
           - "*.r2.cloudflarestorage.com:443"
           - mcr.microsoft.com:443
           - "*.mcr.microsoft.com:443"
-          - docker.io:443
 
 # Declarative identity only; no `requires` (see the header comment).
 provides:
